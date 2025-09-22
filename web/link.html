@@ -1,650 +1,483 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-  />
-  <title>AFRCloud-NET || Link Generator</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ORANG_LEMAH • Free VLESS Trojan Shadowsocks via CF Proxy</title>
 
-  <link rel="icon" href="https://raw.githubusercontent.com/AFRcloud/BG/main/icons8-film-noir-80.png" />
-
-  <meta property="og:image:secure_url" content="https://iili.io/KaKQeHb.jpg" />
-  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
-  <meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)" />
-
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-
-  <link rel="stylesheet" href="css/common.css"/>
-  <link rel="stylesheet" href="css/link.css"/>
+  <!-- Tailwind Play CDN (dev/preview) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <!-- QRCode library: supports QRCode.toCanvas / QRCode.toString -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 
   <style>
-    /* ====== Upgrade tampilan: neon gradient + glass ====== */
+    /* warna & feel sesuai screenshot */
     :root{
-      --ring: 255,108,255; /* pink neon */
-      --ring2: 80,180,255; /* cyan neon */
+      --bg:#0b1627;
+      --bg-soft:#0f1d33;
+      --card:#0f1a2c;
+      --accent:#6a11cb;
+      --accent-2:#2575fc;
+      --muted:#94a3b8;
+      --text:#e5e7eb;
+      --text-dim:#b6c2d1;
+      --ring:#334155;
     }
+    html,body{height:100%}
     body{
-      min-height:100vh;
-      /* animated conic gradient background */
       background:
-        radial-gradient(1200px 600px at 10% -10%, rgba(80,180,255,.15), transparent 60%),
-        radial-gradient(1000px 500px at 110% 20%, rgba(255,108,255,.12), transparent 60%),
-        conic-gradient(from var(--spin,0deg) at 50% -20%, rgba(255,108,255,.08), rgba(80,180,255,.08), rgba(255,108,255,.08));
-      animation: spinBg 18s linear infinite;
+        radial-gradient(1200px 600px at 10% -10%, rgba(106,17,203,.12), transparent 60%),
+        radial-gradient(900px 400px at 90% 0%, rgba(37,117,252,.10), transparent 60%),
+        linear-gradient(180deg, #0a1424 0%, var(--bg) 60%, #0a1424 100%);
+      color:var(--text);
     }
-    @keyframes spinBg{ to { --spin: 360deg; } }
-
-    .container { width:100%; max-width: 520px; padding: 0 .75rem; margin-bottom: 1.25rem; }
-    .card{
-      position:relative;
-      border-radius: 18px;
-      background: rgba(15,23,42, .55);               /* slate-900 w/ alpha */
-      box-shadow:
-        0 10px 30px rgba(0,0,0,.45),
-        0 0 0 1px rgba(148,163,184,.15);             /* subtle stroke */
-      backdrop-filter: blur(14px);                    /* glass effect */
-      -webkit-backdrop-filter: blur(14px);            /* Safari */
-    }
-    .title-container{
-      padding: 2.25rem 1.5rem 1rem;
-      text-align:center;
-    }
-    .title{
-      font-family: "Orbitron", system-ui, sans-serif;
-      letter-spacing: .04em;
-      font-size: 1.75rem;
-      line-height: 1.1;
-      background: linear-gradient(90deg, rgb(var(--ring)) 0%, rgb(var(--ring2)) 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      text-shadow: 0 0 18px rgba(120,180,255,.25);
-      margin: 0;
-    }
-    .subtitle{
-      margin-top: .25rem;
-      font-size: .9rem;
-      color: #a5b4fc;
-      opacity:.85;
-    }
-
-    /* Badge ORANG_LEMAH */
-    .brand-badge{
-      display:inline-flex; align-items:center; gap:.5rem;
-      margin-top: .75rem;
-      padding: .35rem .65rem;
-      border-radius: 999px;
-      font-family: "Share Tech Mono", ui-monospace, monospace;
-      font-size: .72rem; letter-spacing: .08em;
-      color: #e2e8f0;
-      background:
-        linear-gradient( to right,
-          rgba(255,108,255,.18), rgba(80,180,255,.18) );
-      box-shadow:
-        0 0 0 1px rgba(148,163,184,.18) inset,
-        0 6px 20px rgba(80,180,255,.12);
+    .glass{
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border:1px solid rgba(148,163,184,.15);
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      border-radius:20px;
       backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
     }
-    .brand-dot{
-      width:8px; height:8px; border-radius:999px;
-      background: radial-gradient(circle, #fff 0 35%, rgba(255,255,255,.0) 60%),
-                  linear-gradient(90deg, rgb(var(--ring)), rgb(var(--ring2)));
-      box-shadow: 0 0 10px rgba(80,180,255,.65), 0 0 18px rgba(255,108,255,.45);
+    .control{
+      background: #0c1a2f;
+      border:1px solid var(--ring);
+      border-radius:10px;
+      color:var(--text);
+      height:44px;
+      padding:0 .9rem;
+      outline:none;
     }
-
-    /* Buttons slight glow */
+    .control:focus{ box-shadow:0 0 0 2px rgba(99,102,241,.35); border-color:#6366f1 }
     .primary-btn{
-      box-shadow: 0 0 0 1px rgba(148,163,184,.18) inset, 0 6px 20px rgba(80,180,255,.12);
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      color:white; font-weight:600;
+      border-radius:10px;
+      padding:.6rem 1rem;
     }
-    .primary-btn:hover{
-      box-shadow: 0 0 0 1px rgba(148,163,184,.20) inset, 0 8px 26px rgba(80,180,255,.18);
-      transform: translateY(-1px);
+    .secondary-btn{
+      background:#101f36; color:#c9d4e5;
+      border:1px solid var(--ring);
+      border-radius:10px;
+      padding:.55rem .9rem;
     }
-    .glass-input, .glass-select, .glass-code{
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+    .title-grad{
+      background: linear-gradient(90deg,#cde3ff,#fff);
+      -webkit-background-clip:text; background-clip:text;
+      color:transparent;
     }
-
-    /* Footer polish */
-    .footer{
-      border-top: 1px solid rgba(148,163,184,.15);
-      background: linear-gradient(180deg, rgba(2,6,23,.25), rgba(2,6,23,.0));
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+    .table-head{ color:#aebbd0; font-size:.85rem; letter-spacing:.02em }
+    .row{
+      display:grid; grid-template-columns: 260px 100px 1fr 90px; gap:12px;
+      padding:.9rem 1rem; border-bottom:1px solid rgba(148,163,184,.08)
+    }
+    .row:hover{ background:rgba(148,163,184,.05) }
+    .proxy-card{ background:#0d1a2d; border:1px solid rgba(148,163,184,.12); border-radius:12px; padding:12px }
+    .pagination-btn{
+      background:#0e1b30; border:1px solid var(--ring); color:#cbd5e1;
+      border-radius:10px; padding:.45rem .7rem; min-width:38px
+    }
+    .pagination-btn.active{ background:linear-gradient(90deg, var(--accent), var(--accent-2)); color:#fff; border-color:transparent }
+    .pagination-btn.disabled{ opacity:.4; cursor:not-allowed }
+    .hidden{ display:none !important }
+    .show{ display:block !important }
+    .pulse-animation{
+      animation:pulse 1.4s ease-in-out infinite;
+      box-shadow:0 0 0 0 rgba(16,185,129,.5)
+    }
+    @keyframes pulse{
+      0%{transform:scale(.95); box-shadow:0 0 0 0 rgba(148,163,184,.35)}
+      70%{transform:scale(1); box-shadow:0 0 0 10px rgba(148,163,184,0)}
+      100%{transform:scale(.95); box-shadow:0 0 0 0 rgba(148,163,184,0)}
     }
   </style>
 </head>
-<body>
-  <div class="container">
-    <div class="card">
-      <div class="tech-detail tech-detail-1"></div>
-      <div class="tech-detail tech-detail-2"></div>
-      <div class="tech-detail tech-detail-3"></div>
+<body class="min-h-full">
 
-      <div class="title-container">
-        <h1 class="title">AFRCloud-NET</h1>
-        <p class="subtitle">Advanced Link Generator</p>
-        <span class="brand-badge"><span class="brand-dot"></span> ORANG_LEMAH</span>
-      </div>
-
-      <div class="p-4">
-        <div id="proxy-list-section">
-          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5">
-            <div class="flex items-center mb-3 sm:mb-0">
-              <i class="fas fa-server mr-2 text-indigo-400"></i>
-              <h2 class="text-xl font-semibold">Proxy List</h2>
-            </div>
-            <div class="flex flex-col sm:flex-row w-full sm:w-auto space-y-2 sm:space-y-0 sm:space-x-3">
-              <button id="refresh-btn" class="primary-btn py-2 px-4 rounded-lg flex items-center justify-center text-sm">
-                <i class="fas fa-sync-alt mr-2"></i>Refresh
-              </button>
-              <button id="custom-url-btn" class="secondary-btn py-2 px-4 rounded-lg flex items-center justify-center text-sm">
-                <i class="fas fa-link mr-2"></i>URL
-              </button>
-            </div>
-          </div>
-
-          <div id="custom-url-input" class="mb-5 hidden">
-            <div class="flex">
-              <input
-                type="text"
-                id="proxy-url"
-                class="flex-1 px-4 py-2.5 glass-input rounded-l-lg text-sm"
-                placeholder="Enter custom proxy list URL"
-                value="https://raw.githubusercontent.com/AFRcloud/ProxyList/refs/heads/main/ProxyList.txt"
-              />
-              <button id="load-custom-url" class="primary-btn px-4 py-2.5 rounded-r-lg">Load</button>
-            </div>
-          </div>
-
-          <div id="loading-indicator" class="text-center py-10 hidden">
-            <div class="loading-spinner mx-auto mb-4"></div>
-            <p class="text-indigo-300 text-sm">Loading proxy list...</p>
-          </div>
-
-          <div class="mb-4">
-            <div class="relative">
-              <input
-                type="text"
-                id="search-input"
-                class="w-full pl-10 pr-4 py-2.5 glass-input rounded-lg text-sm"
-                placeholder="Search by provider or country..."
-              />
-              <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <i class="fas fa-search text-gray-400"></i>
-              </div>
-            </div>
-          </div>
-
-          <div id="proxy-list-container" class="mt-4"></div>
-
-          <div id="pagination-container" class="flex justify-center items-center mt-6 space-x-2"></div>
-
-          <div id="proxy-count-info" class="text-center mt-3 text-sm text-gray-400"></div>
-
-          <div id="no-proxies-message" class="text-center py-10 hidden">
-            <i class="fas fa-exclamation-circle text-rose-400 text-4xl mb-3"></i>
-            <p class="text-gray-300 text-sm">No proxies found. Please refresh or try a different URL.</p>
-          </div>
+  <!-- Topbar -->
+  <header class="w-full">
+    <div class="max-w-6xl mx-auto flex items-center justify-between px-4 py-4">
+      <div class="flex items-center gap-3">
+        <div class="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center font-black">
+          <span>OL</span>
         </div>
-
-        <div id="account-creation-section" class="mt-6 hidden">
-          <div class="pt-4">
-            <div class="divider mb-6"></div>
-            <div class="flex justify-between items-center mb-5">
-              <div class="flex items-center">
-                <i class="fas fa-user-plus mr-2 text-indigo-400"></i>
-                <h2 class="text-xl font-semibold">Create Account</h2>
-              </div>
-              <button id="back-to-list" class="flex items-center text-indigo-400 hover:text-indigo-300 transition-colors text-sm">
-                <i class="fas fa-arrow-left mr-2"></i> Back to List
-              </button>
-            </div>
-
-            <div class="card p-5 mb-6 overflow-hidden relative">
-              <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-indigo-500/5 to-transparent rounded-bl-full pointer-events-none"></div>
-
-              <h3 class="text-base font-medium text-indigo-400 mb-4 flex items-center">
-                <i class="fas fa-server mr-2"></i>
-                Selected Proxy
-              </h3>
-
-              <div class="grid grid-cols-2 gap-3 mb-4">
-                <div class="flex items-center space-x-2 bg-slate-800/40 p-3 rounded-lg border border-slate-700/30">
-                  <i class="fas fa-building text-indigo-400/70 w-5 text-center"></i>
-                  <div>
-                    <div class="text-xs text-gray-400">Provider</div>
-                    <div id="selected-provider" class="text-sm font-medium text-white">-</div>
-                  </div>
-                </div>
-                <div class="flex items-center space-x-2 bg-slate-800/40 p-3 rounded-lg border border-slate-700/30">
-                  <i class="fas fa-globe-americas text-indigo-400/70 w-5 text-center"></i>
-                  <div>
-                    <div class="text-xs text-gray-400">Country</div>
-                    <div id="selected-country" class="text-sm font-medium text-white">-</div>
-                  </div>
-                </div>
-                <div class="flex items-center space-x-2 bg-slate-800/40 p-3 rounded-lg border border-slate-700/30">
-                  <i class="fas fa-network-wired text-indigo-400/70 w-5 text-center"></i>
-                  <div>
-                    <div class="text-xs text-gray-400">IP</div>
-                    <div id="selected-ip" class="text-sm font-medium text-white">-</div>
-                  </div>
-                </div>
-                <div class="flex items-center space-x-2 bg-slate-800/40 p-3 rounded-lg border border-slate-700/30">
-                  <i class="fas fa-plug text-indigo-400/70 w-5 text-center"></i>
-                  <div>
-                    <div class="text-xs text-gray-400">Port</div>
-                    <div id="selected-port" class="text-sm font-medium text-white">-</div>
-                  </div>
-                </div>
-              </div>
-
-              <div id="proxy-status-container" class="hidden">
-                <div id="proxy-status-active" class="hidden rounded-lg p-3 bg-gradient-to-r from-emerald-900/20 to-emerald-800/10 border border-emerald-500/20">
-                  <div class="flex items-center">
-                    <div class="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mr-3 border border-emerald-500/30">
-                      <i class="fas fa-check text-emerald-400"></i>
-                    </div>
-                    <div>
-                      <div class="text-sm font-medium text-emerald-400">ACTIVE</div>
-                      <div class="text-xs text-gray-400">Latency: <span id="proxy-latency" class="text-amber-400">0ms</span></div>
-                    </div>
-                  </div>
-                </div>
-
-                <div id="proxy-status-dead" class="hidden rounded-lg p-3 bg-gradient-to-r from-rose-900/20 to-rose-800/10 border border-rose-500/20">
-                  <div class="flex items-center">
-                    <div class="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center mr-3 border border-rose-500/30">
-                      <i class="fas fa-times text-rose-500"></i>
-                    </div>
-                    <div>
-                      <div class="text-sm font-medium text-rose-500">DEAD</div>
-                      <div class="text-xs text-gray-400">This proxy may not be working</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div id="proxy-status-unknown" class="hidden rounded-lg p-3 bg-gradient-to-r from-amber-900/20 to-amber-800/10 border border-amber-500/20">
-                  <div class="flex items-center">
-                    <div class="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center mr-3 border border-amber-500/30">
-                      <i class="fas fa-question text-amber-400"></i>
-                    </div>
-                    <div>
-                      <div class="text-sm font-medium text-amber-400">UNKNOWN</div>
-                      <div class="text-xs text-gray-400">Could not check proxy status</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div id="proxy-status-loading" class="rounded-lg p-3 bg-gradient-to-r from-indigo-900/20 to-indigo-800/10 border border-indigo-500/20">
-                  <div class="flex items-center">
-                    <div class="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center mr-3 border border-indigo-500/30">
-                      <div class="loading-spinner-sm"></div>
-                    </div>
-                    <div>
-                      <div class="text-sm font-medium text-indigo-400">CHECKING</div>
-                      <div class="text-xs text-gray-400">Verifying proxy status...</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex border-b border-gray-700 mb-6 overflow-x-auto space-x-1 sm:space-x-0">
-              <button class="tab-btn active py-3 px-4 font-medium text-sm focus:outline-none" data-target="vless-form">
-                <i class="fas fa-bolt mr-2"></i>VLESS
-              </button>
-              <button class="tab-btn py-3 px-4 font-medium text-sm focus:outline-none" data-target="trojan-form">
-                <i class="fas fa-user-secret mr-2"></i>Trojan
-              </button>
-              <button class="tab-btn py-3 px-4 font-medium text-sm focus:outline-none" data-target="vmess-form">
-                <i class="fas fa-shield-alt mr-2"></i>VMess
-              </button>
-              <button class="tab-btn py-3 px-4 font-medium text-sm focus:outline-none" data-target="ss-form">
-                <i class="fas fa-mask mr-2"></i>SS
-              </button>
-            </div>
-
-            <div id="vmess-form" class="protocol-form hidden">
-              <form id="vmess-account-form" class="space-y-5">
-                <div>
-                  <label for="vmess-name" class="block text-sm font-medium text-gray-300 mb-2">Account Name</label>
-                  <input type="text" id="vmess-name" name="name" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
-                </div>
-
-                <div>
-                  <label for="vmess-uuid" class="block text-sm font-medium text-gray-300 mb-2">UUID</label>
-                  <div class="flex">
-                    <input type="text" id="vmess-uuid" name="uuid" class="flex-1 px-4 py-2.5 glass-input rounded-l-lg text-sm" value="fccdaaae-af39-41a7-9fde-fd32a48278cf" required />
-                    <button type="button" onclick="generateUUID('vmess-uuid')" class="secondary-btn px-4 py-2.5 rounded-r-lg hover:bg-slate-700">
-                      <i class="fas fa-sync-alt"></i>
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label for="vmess-path" class="block text-sm font-medium text-gray-300 mb-2">Path</label>
-                  <input type="text" id="vmess-path" name="path" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
-                </div>
-
-                <div>
-                  <label for="vmess-security" class="block text-sm font-medium text-gray-300 mb-2">TLS</label>
-                  <select id="vmess-security" name="security" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm">
-                    <option value="tls">TLS</option>
-                    <option value="none">None</option>
-                  </select>
-                  <input type="hidden" id="vmess-encryption" name="encryption" value="zero" />
-                </div>
-
-                <div>
-                  <label for="vmess-server-domain" class="block text-sm font-medium text-gray-300 mb-2">Server Domain</label>
-                  <select id="vmess-server-domain" name="server-domain" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm"></select>
-                </div>
-
-                <div>
-                  <label for="vmess-bug" class="block text-sm font-medium text-gray-300 mb-2">Custom Bug <span class="text-xs text-gray-500">(opsional)</span></label>
-                  <input type="text" id="vmess-bug" name="bug" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm" />
-                  <div id="vmess-manual-bug-container" class="wildcard-container">
-                    <input type="text" id="vmess-manual-bug" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm mt-2" placeholder="Enter custom bug domain" />
-                  </div>
-                  <div id="vmess-wildcard-container" class="wildcard-container">
-                    <div class="checkbox-container">
-                      <input type="checkbox" id="vmess-wildcard" name="wildcard" />
-                      <label for="vmess-wildcard">Gunakan Wildcard (bug.domain.com)</label>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="pt-2">
-                  <button type="submit" class="w-full primary-btn py-3 px-4 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-plus-circle mr-2"></i> Create VMess Account
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <div id="vless-form" class="protocol-form">
-              <form id="vless-account-form" class="space-y-5">
-                <div>
-                  <label for="vless-name" class="block text-sm font-medium text-gray-300 mb-2">Account Name</label>
-                  <input type="text" id="vless-name" name="name" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
-                </div>
-
-                <div>
-                  <label for="vless-uuid" class="block text-sm font-medium text-gray-300 mb-2">UUID</label>
-                  <div class="flex">
-                    <input type="text" id="vless-uuid" name="uuid" class="flex-1 px-4 py-2.5 glass-input rounded-l-lg text-sm" value="fccdaaae-af39-41a7-9fde-fd32a48278cf" required />
-                    <button type="button" onclick="generateUUID('vless-uuid')" class="secondary-btn px-4 py-2.5 rounded-r-lg hover:bg-slate-700">
-                      <i class="fas fa-sync-alt"></i>
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label for="vless-path" class="block text-sm font-medium text-gray-300 mb-2">Path</label>
-                  <input type="text" id="vless-path" name="path" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
-                </div>
-
-                <div>
-                  <label for="vless-security" class="block text-sm font-medium text-gray-300 mb-2">TLS</label>
-                  <select id="vless-security" name="security" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm">
-                    <option value="tls">TLS</option>
-                    <option value="none">None</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label for="vless-server-domain" class="block text-sm font-medium text-gray-300 mb-2">Server Domain</label>
-                  <select id="vless-server-domain" name="server-domain" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm"></select>
-                </div>
-
-                <div>
-                  <label for="vless-bug" class="block text-sm font-medium text-gray-300 mb-2">Custom Bug <span class="text-xs text-gray-500">(opsional)</span></label>
-                  <input type="text" id="vless-bug" name="bug" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm" />
-                  <div id="vless-manual-bug-container" class="wildcard-container">
-                    <input type="text" id="vless-manual-bug" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm mt-2" placeholder="Enter custom bug domain" />
-                  </div>
-                  <div id="vless-wildcard-container" class="wildcard-container">
-                    <div class="checkbox-container">
-                      <input type="checkbox" id="vless-wildcard" name="wildcard" />
-                      <label for="vless-wildcard">Gunakan Wildcard (bug.domain.com)</label>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="pt-2">
-                  <button type="submit" class="w-full primary-btn py-3 px-4 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-plus-circle mr-2"></i> Create VLESS Account
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <div id="trojan-form" class="protocol-form hidden">
-              <form id="trojan-account-form" class="space-y-5">
-                <div>
-                  <label for="trojan-name" class="block text-sm font-medium text-gray-300 mb-2">Account Name</label>
-                  <input type="text" id="trojan-name" name="name" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
-                </div>
-
-                <div>
-                  <label for="trojan-password" class="block text-sm font-medium text-gray-300 mb-2">Password</label>
-                  <div class="flex">
-                    <input type="text" id="trojan-password" name="password" class="flex-1 px-4 py-2.5 glass-input rounded-l-lg text-sm" value="fccdaaae-af39-41a7-9fde-fd32a48278cf" required />
-                    <button type="button" onclick="generatePassword('trojan-password')" class="secondary-btn px-4 py-2.5 rounded-r-lg hover:bg-slate-700">
-                      <i class="fas fa-sync-alt"></i>
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label for="trojan-path" class="block text-sm font-medium text-gray-300 mb-2">Path</label>
-                  <input type="text" id="trojan-path" name="path" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
-                </div>
-
-                <div>
-                  <label for="trojan-security" class="block text-sm font-medium text-gray-300 mb-2">TLS</label>
-                  <select id="trojan-security" name="security" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm">
-                    <option value="tls">TLS</option>
-                    <option value="none">None</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label for="trojan-server-domain" class="block text-sm font-medium text-gray-300 mb-2">Server Domain</label>
-                  <select id="trojan-server-domain" name="server-domain" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm"></select>
-                </div>
-
-                <div>
-                  <label for="trojan-bug" class="block text-sm font-medium text-gray-300 mb-2">Custom Bug <span class="text-xs text-gray-500">(opsional)</span></label>
-                  <input type="text" id="trojan-bug" name="bug" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm" />
-                  <div id="trojan-manual-bug-container" class="wildcard-container">
-                    <input type="text" id="trojan-manual-bug" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm mt-2" placeholder="Enter custom bug domain" />
-                  </div>
-                  <div id="trojan-wildcard-container" class="wildcard-container">
-                    <div class="checkbox-container">
-                      <input type="checkbox" id="trojan-wildcard" name="wildcard" />
-                      <label for="trojan-wildcard">Gunakan Wildcard (bug.domain.com)</label>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="pt-2">
-                  <button type="submit" class="w-full primary-btn py-3 px-4 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-plus-circle mr-2"></i> Create Trojan Account
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <div id="ss-form" class="protocol-form hidden">
-              <form id="ss-account-form" class="space-y-5">
-                <div>
-                  <label for="ss-name" class="block text-sm font-medium text-gray-300 mb-2">Account Name</label>
-                  <input type="text" id="ss-name" name="name" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
-                </div>
-
-                <div>
-                  <label for="ss-password" class="block text-sm font-medium text-gray-300 mb-2">Password</label>
-                  <div class="flex">
-                    <input type="text" id="ss-password" name="password" class="flex-1 px-4 py-2.5 glass-input rounded-l-lg text-sm" value="fccdaaae-af39-41a7-9fde-fd32a48278cf" required />
-                    <button type="button" onclick="generatePassword('ss-password')" class="secondary-btn px-4 py-2.5 rounded-r-lg hover:bg-slate-700">
-                      <i class="fas fa-sync-alt"></i>
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label for="ss-path" class="block text-sm font-medium text-gray-300 mb-2">Path</label>
-                  <input type="text" id="ss-path" name="path" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
-                </div>
-
-                <div>
-                  <label for="ss-security" class="block text-sm font-medium text-gray-300 mb-2">TLS</label>
-                  <select id="ss-security" name="security" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm">
-                    <option value="tls">TLS</option>
-                    <option value="none">None</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label for="ss-server-domain" class="block text-sm font-medium text-gray-300 mb-2">Server Domain</label>
-                  <select id="ss-server-domain" name="server-domain" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm"></select>
-                </div>
-
-                <div>
-                  <label for="ss-bug" class="block text-sm font-medium text-gray-300 mb-2">Custom Bug <span class="text-xs text-gray-500">(opsional)</span></label>
-                  <input type="text" id="ss-bug" name="bug" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm" />
-                  <div id="ss-manual-bug-container" class="wildcard-container">
-                    <input type="text" id="ss-manual-bug" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm mt-2" placeholder="Enter custom bug domain" />
-                  </div>
-                  <div id="ss-wildcard-container" class="wildcard-container">
-                    <div class="checkbox-container">
-                      <input type="checkbox" id="ss-wildcard" name="wildcard" />
-                      <label for="ss-wildcard">Gunakan Wildcard (bug.domain.com)</label>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="pt-2">
-                  <button type="submit" class="w-full primary-btn py-3 px-4 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-plus-circle mr-2"></i> Create Shadowsocks Account
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-
-        <div id="result-section" class="mt-6 hidden">
-          <div class="pt-4">
-            <div class="divider mb-6"></div>
-            <div class="flex justify-between items-center mb-5">
-              <div class="flex items-center">
-                <i class="fas fa-check-circle mr-2 text-emerald-400"></i>
-                <h2 class="text-xl font-semibold">Account Created</h2>
-              </div>
-              <button id="back-to-form" class="flex items-center text-indigo-400 hover:text-indigo-300 transition-colors text-sm">
-                <i class="fas fa-arrow-left mr-2"></i> Back
-              </button>
-            </div>
-
-            <div class="card p-5 mb-5">
-              <div class="flex justify-between items-center mb-3">
-                <h3 class="text-base font-medium text-indigo-400">Connection URL</h3>
-                <button id="copy-url" class="flex items-center text-indigo-400 hover:text-indigo-300 text-xs transition-colors">
-                  <i class="far fa-copy mr-1"></i> Copy
-                </button>
-              </div>
-              <div id="connection-url" class="text-xs glass-code p-4 rounded-lg break-all font-mono"></div>
-            </div>
-
-            <div class="card p-5">
-              <div class="flex justify-between items-center mb-3">
-                <h3 class="text-base font-medium text-indigo-400">QR Code</h3>
-                <button id="download-qr" class="flex items-center text-indigo-400 hover:text-indigo-300 text-xs transition-colors">
-                  <i class="fas fa-download mr-1"></i> Download
-                </button>
-              </div>
-              <div class="flex justify-center py-4">
-                <div id="qrcode" class="qrcode-container"></div>
-              </div>
-            </div>
-
-            <div class="mt-6 flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
-              <button id="create-new" class="flex-1 primary-btn py-3 px-4 rounded-lg flex items-center justify-center text-sm">
-                <i class="fas fa-plus-circle mr-2"></i> Create Another
-              </button>
-              <button id="back-to-list-from-result" class="flex-1 secondary-btn py-3 px-4 rounded-lg flex items-center justify-center text-sm">
-                <i class="fas fa-list mr-2"></i> Back to List
-              </button>
-            </div>
-          </div>
+        <div class="leading-tight">
+          <div class="font-extrabold text-lg tracking-wide">ORANG_LEMAH</div>
+          <div class="text-[12px] text-slate-400 -mt-0.5">Nautica Proxy Utility</div>
         </div>
       </div>
-    </div>
-  </div>
-
-  <footer class="footer">
-    <div class="circuit-line circuit-line-1"></div>
-    <div class="circuit-line circuit-line-2"></div>
-    <div class="circuit-line circuit-line-3"></div>
-    <div class="circuit-line circuit-line-4"></div>
-    <div class="circuit-dot circuit-dot-1"></div>
-    <div class="circuit-dot circuit-dot-2"></div>
-    <div class="circuit-dot circuit-dot-3"></div>
-    <div class="circuit-dot circuit-dot-4"></div>
-
-    <div class="footer-logo">AFRCloud-NET</div>
-    <div class="footer-powered">POWERED BY SECURE TECHNOLOGY</div>
-
-    <div class="footer-social">
-      <a href="https://t.me/Noir7R" class="social-link" target="_blank"> @Noir7R </a>
-    </div>
-
-    <div class="footer-social">
-      <a href="https://t.me/inconigto_Mode" class="social-link" target="_blank"> @inconigto_Mode </a>
-      <a href="https://t.me/InconigtoMode" class="social-link" target="_blank"> @InconigtoMode </a>
-    </div>
-
-    <div class="footer-year">© <span id="current-year"></span></div>
-  </footer>
-
-  <div id="donation-button" class="donate-btn">
-    <i class="fas fa-hand-holding-heart"></i>
-  </div>
-
-  <div id="donation-modal" class="donation-modal">
-    <div class="donation-backdrop" id="donation-backdrop"></div>
-    <div class="donation-content" id="donation-content">
-      <div class="donation-border"><div class="donation-border-animation"></div></div>
-      <div class="donation-body">
-        <button id="close-donation" class="close-donation"><i class="fas fa-times"></i></button>
-        <h3 class="donation-title">Support AFRCloud-NET</h3>
-        <p class="donation-text">Your donation helps keep our services running</p>
-        <div class="qris-container">
-          <div class="qris-border"><div class="qris-border-animation"></div></div>
-          <div class="qris-image-container">
-            <img src="https://raw.githubusercontent.com/AFRcloud/Inconigto-Mode/refs/heads/master/web/qris.png" alt="Donation QR Code" class="qris-image" />
-          </div>
-        </div>
-        <p class="donation-small-text">Scan this QR code with your payment app to donate</p>
+      <div class="flex items-center gap-2">
+        <a href="#" class="primary-btn text-sm">Create VPN</a>
+        <a href="#" class="secondary-btn text-sm">Cek Kuota</a>
       </div>
     </div>
-  </div>
+  </header>
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" defer></script>
-  
-  <script src="js/common.js?v=2" defer></script>
-  <script src="js/link.js?v=6" defer></script>
+  <!-- Main Card -->
+  <main class="max-w-6xl mx-auto px-4 pb-16">
+    <section class="glass p-6 sm:p-8 mt-6">
+
+      <h1 class="text-center text-2xl sm:text-3xl font-extrabold mb-6">
+        <span class="title-grad">Free Vless Trojan ShadowSocks Using CF Proxy</span>
+      </h1>
+
+      <!-- Filter bar -->
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
+        <div>
+          <label class="block text-sm text-slate-300 mb-1">Protocol</label>
+          <select id="protocol-select" class="control">
+            <option value="VLESS">VLESS</option>
+            <option value="VMESS">VMESS</option>
+            <option value="TROJAN">TROJAN</option>
+            <option value="SS">SS</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-300 mb-1">Country</label>
+          <select id="country-select" class="control">
+            <option value="all">🌐 All</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-300 mb-1">Wildcard</label>
+          <!-- di JS: tidak dipakai langsung; dropdown bug/wildcard ada di form, ini hanya kosmetik filter seperti di screenshot -->
+          <select id="wildcard-filter" class="control">
+            <option>Default</option>
+            <option>support.zoom.us</option>
+            <option>ava.game.naver.com</option>
+            <option>api.midtrans.com</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-300 mb-1">Security</label>
+          <select id="security-filter" class="control">
+            <option value="tls">TLS (443)</option>
+            <option value="ntls">NTLS (80)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <button id="refresh-btn" class="secondary-btn flex items-center gap-2">
+            <i class="fa-solid fa-rotate"></i><span>Refresh</span>
+          </button>
+          <button id="custom-url-btn" class="secondary-btn">Custom URL</button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <input id="search-input" class="control !h-10 pr-8" placeholder="Search ISP / Country" />
+            <span class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400">
+              <i class="fa-solid fa-magnifying-glass"></i>
+            </span>
+          </div>
+          <span id="proxy-count-info" class="text-xs text-slate-400"></span>
+        </div>
+      </div>
+
+      <!-- Custom URL field (hidden default) -->
+      <div id="custom-url-input" class="hidden mb-4">
+        <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+          <input id="proxy-url" class="control" placeholder="https://.../ProxyList.txt" />
+          <button id="load-custom-url" class="primary-btn">Load</button>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div id="loading-indicator" class="hidden text-center py-6 text-slate-300">
+        <i class="fa-solid fa-spinner animate-spin mr-2"></i> Loading proxies...
+      </div>
+
+      <!-- List Section -->
+      <section id="proxy-list-section">
+        <div class="row table-head bg-[#0d1a2a] rounded-t-xl border-b border-slate-700/60">
+          <div>IP</div><div>Country</div><div>ISP</div><div class="text-right pr-2">Action</div>
+        </div>
+
+        <div id="proxy-list-container" class="divide-y divide-slate-700/40">
+          <!-- rows diisi JS -->
+        </div>
+
+        <div id="no-proxies-message" class="hidden text-center text-slate-400 py-6">
+          No proxies found.
+        </div>
+
+        <!-- Pagination -->
+        <div id="pagination-container" class="flex items-center gap-2 justify-center mt-5"></div>
+      </section>
+
+      <!-- Account Creation Section (hidden by default) -->
+      <section id="account-creation-section" class="hidden mt-4">
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="text-sm text-slate-400">Selected</div>
+            <div class="mt-1 text-slate-200">
+              <span id="selected-ip" class="font-semibold"></span> :
+              <span id="selected-port"></span>
+              <span class="text-slate-400 ml-3">(<span id="selected-country"></span>)</span>
+            </div>
+            <div class="text-slate-400 text-sm" id="selected-provider"></div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="back-to-list" class="secondary-btn">Back to List</button>
+          </div>
+        </div>
+
+        <!-- status ping -->
+        <div id="proxy-status-container" class="hidden mt-3">
+          <div id="proxy-status-loading" class="text-slate-300"><i class="fa-solid fa-circle-notch animate-spin mr-2"></i> Checking...</div>
+          <div id="proxy-status-active" class="hidden text-emerald-400"><i class="fa-solid fa-circle mr-2"></i> Active • <span id="proxy-latency">0ms</span></div>
+          <div id="proxy-status-dead" class="hidden text-rose-400"><i class="fa-solid fa-circle mr-2"></i> Dead</div>
+          <div id="proxy-status-unknown" class="hidden text-amber-400"><i class="fa-solid fa-circle mr-2"></i> Unknown</div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <button class="tab-btn primary-btn" data-target="vmess-form-wrap">VMess</button>
+          <button class="tab-btn secondary-btn" data-target="vless-form-wrap">VLESS</button>
+          <button class="tab-btn secondary-btn" data-target="trojan-form-wrap">Trojan</button>
+          <button class="tab-btn secondary-btn" data-target="ss-form-wrap">SS</button>
+        </div>
+
+        <!-- Forms -->
+        <div class="mt-5 space-y-6">
+
+          <!-- VMESS -->
+          <div id="vmess-form-wrap" class="protocol-form">
+            <form id="vmess-account-form" class="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm mb-1">Name</label>
+                <input id="vmess-name" name="name" class="control" placeholder="My VMess" />
+              </div>
+              <div>
+                <label class="block text-sm mb-1">UUID</label>
+                <input id="vmess-uuid" name="uuid" class="control" value="8febb7c9-a664-4b16-bbc5-563b099a4860" />
+              </div>
+
+              <div>
+                <label class="block text-sm mb-1">Server Domain</label>
+                <select id="vmess-server-domain" class="control"></select>
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Security</label>
+                <select id="vmess-security" name="security" class="control">
+                  <option value="tls">tls</option>
+                  <option value="ntls">ntls</option>
+                </select>
+              </div>
+
+              <div class="sm:col-span-2">
+                <label class="block text-sm mb-1">Path</label>
+                <input id="vmess-path" name="path" class="control" value="/" />
+              </div>
+
+              <div>
+                <label class="block text-sm mb-1">Bug</label>
+                <select id="vmess-bug" name="bug" class="control"></select>
+              </div>
+              <div id="vmess-manual-bug-container" class="hidden">
+                <label class="block text-sm mb-1">Manual Bug</label>
+                <input id="vmess-manual-bug" class="control" placeholder="host.example.com" />
+              </div>
+              <div id="vmess-wildcard-container" class="hidden">
+                <label class="inline-flex items-center gap-2 text-sm mt-2">
+                  <input id="vmess-wildcard" name="wildcard" type="checkbox" class="h-4 w-4">
+                  <span>Wildcard (bug.subdomain.server)</span>
+                </label>
+              </div>
+
+              <div class="sm:col-span-2 flex justify-end mt-2">
+                <button class="primary-btn" type="submit">Generate</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- VLESS -->
+          <div id="vless-form-wrap" class="protocol-form hidden">
+            <form id="vless-account-form" class="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm mb-1">Name</label>
+                <input id="vless-name" name="name" class="control" placeholder="My VLESS" />
+              </div>
+              <div>
+                <label class="block text-sm mb-1">UUID</label>
+                <input id="vless-uuid" name="uuid" class="control" value="8febb7c9-a664-4b16-bbc5-563b099a4860" />
+              </div>
+
+              <div>
+                <label class="block text-sm mb-1">Server Domain</label>
+                <select id="vless-server-domain" class="control"></select>
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Security</label>
+                <select id="vless-security" name="security" class="control">
+                  <option value="tls">tls</option>
+                  <option value="ntls">ntls</option>
+                </select>
+              </div>
+
+              <div class="sm:col-span-2">
+                <label class="block text-sm mb-1">Path</label>
+                <input id="vless-path" name="path" class="control" value="/" />
+              </div>
+
+              <div>
+                <label class="block text-sm mb-1">Bug</label>
+                <select id="vless-bug" name="bug" class="control"></select>
+              </div>
+              <div id="vless-manual-bug-container" class="hidden">
+                <label class="block text-sm mb-1">Manual Bug</label>
+                <input id="vless-manual-bug" class="control" placeholder="host.example.com" />
+              </div>
+              <div id="vless-wildcard-container" class="hidden">
+                <label class="inline-flex items-center gap-2 text-sm mt-2">
+                  <input id="vless-wildcard" name="wildcard" type="checkbox" class="h-4 w-4">
+                  <span>Wildcard (bug.subdomain.server)</span>
+                </label>
+              </div>
+
+              <div class="sm:col-span-2 flex justify-end mt-2">
+                <button class="primary-btn" type="submit">Generate</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- TROJAN -->
+          <div id="trojan-form-wrap" class="protocol-form hidden">
+            <form id="trojan-account-form" class="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm mb-1">Name</label>
+                <input id="trojan-name" name="name" class="control" placeholder="My Trojan" />
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Password</label>
+                <input id="trojan-password" name="password" class="control" placeholder="password" />
+              </div>
+
+              <div>
+                <label class="block text-sm mb-1">Server Domain</label>
+                <select id="trojan-server-domain" class="control"></select>
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Security</label>
+                <select id="trojan-security" name="security" class="control">
+                  <option value="tls">tls</option>
+                  <option value="ntls">ntls</option>
+                </select>
+              </div>
+
+              <div class="sm:col-span-2">
+                <label class="block text-sm mb-1">Path</label>
+                <input id="trojan-path" name="path" class="control" value="/" />
+              </div>
+
+              <div>
+                <label class="block text-sm mb-1">Bug</label>
+                <select id="trojan-bug" name="bug" class="control"></select>
+              </div>
+              <div id="trojan-manual-bug-container" class="hidden">
+                <label class="block text-sm mb-1">Manual Bug</label>
+                <input id="trojan-manual-bug" class="control" placeholder="host.example.com" />
+              </div>
+              <div id="trojan-wildcard-container" class="hidden">
+                <label class="inline-flex items-center gap-2 text-sm mt-2">
+                  <input id="trojan-wildcard" name="wildcard" type="checkbox" class="h-4 w-4">
+                  <span>Wildcard (bug.subdomain.server)</span>
+                </label>
+              </div>
+
+              <div class="sm:col-span-2 flex justify-end mt-2">
+                <button class="primary-btn" type="submit">Generate</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- SS -->
+          <div id="ss-form-wrap" class="protocol-form hidden">
+            <form id="ss-account-form" class="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm mb-1">Name</label>
+                <input id="ss-name" name="name" class="control" placeholder="My SS" />
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Password</label>
+                <input id="ss-password" name="password" class="control" placeholder="password" />
+              </div>
+
+              <div>
+                <label class="block text-sm mb-1">Server Domain</label>
+                <select id="ss-server-domain" class="control"></select>
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Security</label>
+                <select id="ss-security" name="security" class="control">
+                  <option value="tls">tls</option>
+                  <option value="ntls">ntls</option>
+                </select>
+              </div>
+
+              <div class="sm:col-span-2">
+                <label class="block text-sm mb-1">Path</label>
+                <input id="ss-path" name="path" class="control" value="/" />
+              </div>
+
+              <div>
+                <label class="block text-sm mb-1">Bug</label>
+                <select id="ss-bug" name="bug" class="control"></select>
+              </div>
+              <div id="ss-manual-bug-container" class="hidden">
+                <label class="block text-sm mb-1">Manual Bug</label>
+                <input id="ss-manual-bug" class="control" placeholder="host.example.com" />
+              </div>
+              <div id="ss-wildcard-container" class="hidden">
+                <label class="inline-flex items-center gap-2 text-sm mt-2">
+                  <input id="ss-wildcard" name="wildcard" type="checkbox" class="h-4 w-4">
+                  <span>Wildcard (bug.subdomain.server)</span>
+                </label>
+              </div>
+
+              <div class="sm:col-span-2 flex justify-end mt-2">
+                <button class="primary-btn" type="submit">Generate</button>
+              </div>
+            </form>
+          </div>
+
+        </div>
+
+        <div class="mt-6">
+          <button id="back-to-form" class="secondary-btn hidden">Back</button>
+        </div>
+      </section>
+
+      <!-- Result Section -->
+      <section id="result-section" class="hidden mt-8">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xl font-semibold">Result</h3>
+          <div class="flex items-center gap-2">
+            <button id="back-to-list-from-result" class="secondary-btn">Back to List</button>
+            <button id="create-new" class="secondary-btn">Create New</button>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-[1fr_auto] gap-3 mt-4">
+          <pre id="connection-url" class="glass p-3 rounded-lg overflow-x-auto text-[13px]"></pre>
+          <div class="flex sm:flex-col gap-2">
+            <button id="copy-url" class="secondary-btn"><i class="far fa-copy mr-1"></i> Copy</button>
+            <button id="download-qr" class="primary-btn">Download QR</button>
+          </div>
+        </div>
+
+        <div id="qrcode" class="mt-4 p-3 bg-[#0e1b30] border border-slate-700/50 rounded-xl w-[210px] h-[210px] flex items-center justify-center"></div>
+      </section>
+
+    </section>
+  </main>
+
+  <!-- Font Awesome (icons for demo) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <!-- App JS kamu -->
+  <script src="app.js"></script>
 </body>
 </html>
