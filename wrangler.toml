@@ -1,5 +1,5 @@
 name = "sirtu"
-account_id = "ae684acc5926e121339ca190d2cdf0e5"
+account_id = "da83e4a54ac56b6f89577502ffa28c3d"
 main = "build/worker/shim.mjs"
 compatibility_date = "2024-05-23"
 minify = true
@@ -9,8 +9,8 @@ workers_dev = true
 
 # ===== KV bindings (berlaku untuk semua env) =====
 [[kv_namespaces]]
-binding = "sirtu"
-id = "ad74514dc50d44f1a565f48fbe91c6e2"
+binding = "sak"
+id = "1ba6775b4a9442b4b2f1cdd7129584b9"
 
 # ===== Rust custom build (butuh Cargo di CI/runner) =====
 [build]
@@ -24,18 +24,18 @@ build = { command = "cargo install -q worker-build && worker-build --dev" }
 # ===== PRODUCTION (aktifkan semua custom domain di sini) =====
 [env.production]
 routes = [
-  { pattern = "sirtu.oranglemah.my.id", custom_domain = true },
-  { pattern = "support.zoom.us.sirtu.oranglemah.my.id", custom_domain = true },
-  { pattern = "ava.game.naver.com.sirtu.oranglemah.my.id", custom_domain = true },
-  { pattern = "graph.instagram.com.sirtu.oranglemah.my.id", custom_domain = true },
-  { pattern = "df.game.naver.com.sirtu.oranglemah.my.id", custom_domain = true },
-  { pattern = "zoomgov.com.sirtu.oranglemah.my.id", custom_domain = true }
+  { pattern = "sak.labudaminha.web.id", custom_domain = true },
+  { pattern = "support.zoom.us.sak.labudaminha.web.id", custom_domain = true },
+  { pattern = "ava.game.naver.com.sak.labudaminha.web.id", custom_domain = true },
+  { pattern = "graph.instagram.com.sak.labudaminha.web.id", custom_domain = true },
+  { pattern = "df.game.naver.com.sak.labudaminha.web.id", custom_domain = true },
+  { pattern = "zoomgov.com.sak.labudaminha.web.id", custom_domain = true }
 ]
 
 
 [vars]
 UUID = "8febb7c9-a664-4b16-bbc5-563b099a4860"
-MAIN_PAGE_URL      = "https://raw.githubusercontent.com/oranglemah/worker-coba/refs/heads/main/web/index.html"
-SUB_PAGE_URL       = "https://raw.githubusercontent.com/oranglemah/worker-coba/refs/heads/main/web/sub.html"
-LINK_PAGE_URL      = "https://raw.githubusercontent.com/oranglemah/worker-coba/refs/heads/main/web/link.html"
-CONVERTER_PAGE_URL = "https://raw.githubusercontent.com/oranglemah/worker-coba/refs/heads/main/web/converter.html"
+MAIN_PAGE_URL      = "https://raw.githubusercontent.com/labudaminha/sak/refs/heads/main/web/index.html"
+SUB_PAGE_URL       = "https://raw.githubusercontent.com/labudaminha/sak/refs/heads/main/web/sub.html"
+LINK_PAGE_URL      = "https://raw.githubusercontent.com/labudaminha/sak/refs/heads/main/web/link.html"
+CONVERTER_PAGE_URL = "https://raw.githubusercontent.com/labudaminha/sak/refs/heads/main/web/converter.html"
