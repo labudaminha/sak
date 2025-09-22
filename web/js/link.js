@@ -14,7 +14,7 @@ const defaultProxyUrl =
 
 // === Server domains (merge + dedupe) ===
 const DEFAULT_SERVER_DOMAINS = [
-  "sirtu.oranglemah.my.id",
+  "sak.labudaminha.web.id",
   "dia.oranglemah.web.id",
 ];
 
