@@ -1,642 +1,650 @@
-/**
- * app.js (patched)
- * – Robust guards, QRCode safe, stronger CORS fallbacks, no-crash listeners
- */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  />
+  <title>AFRCloud-NET || Link Generator</title>
 
-// ====== QRCode global (safe) ======
-const QRCode = (typeof window !== "undefined" && window.QRCode) ? window.QRCode : null;
+  <link rel="icon" href="https://raw.githubusercontent.com/AFRcloud/BG/main/icons8-film-noir-80.png" />
 
-// ====== Globals ======
-let proxyList = [];
-let filteredProxyList = [];
-let selectedProxy = null;
+  <meta property="og:image:secure_url" content="https://iili.io/KaKQeHb.jpg" />
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)" />
 
-const defaultProxyUrl = "https://raw.githubusercontent.com/AFRcloud/ProxyList/refs/heads/main/ProxyList.txt";
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
 
-// Default + injected server domains
-const DEFAULT_SERVER_DOMAINS = ["sak.labudaminha.web.id", "dia.oranglemah.web.id"];
-(function initServerDomains() {
-  const raw = (typeof window !== "undefined") ? window.SERVER_DOMAINS : undefined;
-  let injected = [];
-  if (Array.isArray(raw)) injected = raw;
-  else if (typeof raw === "string" && raw.trim()) {
-    injected = raw.split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean);
-  }
-  window.__SERVER_DOMAINS = Array.from(new Set([...(injected || []), ...DEFAULT_SERVER_DOMAINS]));
-})();
-const serverDomains = (typeof window !== "undefined" && window.__SERVER_DOMAINS) ? window.__SERVER_DOMAINS : DEFAULT_SERVER_DOMAINS.slice();
-let selectedServerDomain = serverDomains[0] || "";
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 
-// Const
-const defaultUUID = "8febb7c9-a664-4b16-bbc5-563b099a4860";
-const itemsPerPage = 10;
-let currentPage = 1;
-const pathTemplate = "/Free/{ip}-{port}";
+  <link rel="stylesheet" href="css/common.css"/>
+  <link rel="stylesheet" href="css/link.css"/>
 
-// Bug options
-const bugOptions = [
-  { value: "", label: "Default" },
-  { value: "support.zoom.us", label: "ZOOM" },
-  { value: "ava.game.naver.com", label: "AVA" },
-  { value: "api.midtrans.com", label: "MIDTRANS" },
-];
-
-// ====== DOM helper (safe) ======
-const byId = (id) => document.getElementById(id);
-
-// Section/controls (guarded)
-let proxyListSection, accountCreationSection, resultSection, loadingIndicator;
-let proxyListContainer, noProxiesMessage, customUrlInput, proxyUrlInput;
-let paginationContainer, proxyCountInfo, searchInput;
-
-// INIT
-document.addEventListener("DOMContentLoaded", () => {
-  // Bind safely
-  proxyListSection       = byId("proxy-list-section");
-  accountCreationSection = byId("account-creation-section");
-  resultSection          = byId("result-section");
-  loadingIndicator       = byId("loading-indicator");
-  proxyListContainer     = byId("proxy-list-container");
-  noProxiesMessage       = byId("no-proxies-message");
-  customUrlInput         = byId("custom-url-input");
-  proxyUrlInput          = byId("proxy-url");
-  paginationContainer    = byId("pagination-container");
-  proxyCountInfo         = byId("proxy-count-info");
-  searchInput            = byId("search-input");
-
-  // Tampilkan minimal 1 data supaya UI tidak kosong
-  displayFallbackProxyList();
-
-  // Load proxy dari sumber utama + mirrors
-  loadProxyList(defaultProxyUrl);
-
-  // === Toolbar/listeners (guard tiap elemen) ===
-  const refreshBtn = byId("refresh-btn");
-  refreshBtn && refreshBtn.addEventListener("click", () => loadProxyList(defaultProxyUrl));
-
-  const customUrlBtn = byId("custom-url-btn");
-  customUrlBtn && customUrlBtn.addEventListener("click", () => {
-    customUrlInput && customUrlInput.classList.toggle("hidden");
-  });
-
-  const loadCustom = byId("load-custom-url");
-  loadCustom && loadCustom.addEventListener("click", () => {
-    const url = (proxyUrlInput && proxyUrlInput.value || "").trim();
-    if (url) loadProxyList(url);
-  });
-
-  const backToList = byId("back-to-list");
-  backToList && backToList.addEventListener("click", () => showProxyListSection());
-
-  const backToForm = byId("back-to-form");
-  backToForm && backToForm.addEventListener("click", () => {
-    resultSection && resultSection.classList.add("hidden");
-    accountCreationSection && accountCreationSection.classList.remove("hidden");
-  });
-
-  const createNew = byId("create-new");
-  createNew && createNew.addEventListener("click", () => {
-    resultSection && resultSection.classList.add("hidden");
-    accountCreationSection && accountCreationSection.classList.remove("hidden");
-  });
-
-  const backToListFromResult = byId("back-to-list-from-result");
-  backToListFromResult && backToListFromResult.addEventListener("click", () => showProxyListSection());
-
-  // Pencarian
-  searchInput && searchInput.addEventListener("input", function () {
-    const term = (this.value || "").toLowerCase().trim();
-    filteredProxyList = term
-      ? proxyList.filter(p =>
-          (p.provider || "").toLowerCase().includes(term) ||
-          (p.country  || "").toLowerCase().includes(term)
-        )
-      : [...proxyList];
-    currentPage = 1;
-    renderProxyList();
-  });
-
-  // Tabs -> show forms
-  const protocolTabs = document.querySelectorAll(".tab-btn");
-  const protocolForms = document.querySelectorAll(".protocol-form");
-  protocolTabs.forEach(tab => {
-    tab.addEventListener("click", () => {
-      protocolTabs.forEach(t => t.classList.remove("primary-btn"));
-      protocolTabs.forEach(t => t.classList.add("secondary-btn"));
-      tab.classList.remove("secondary-btn");
-      tab.classList.add("primary-btn");
-
-      protocolForms.forEach(f => f.classList.add("hidden"));
-      const targetId = tab.getAttribute("data-target");
-      const tgt = targetId ? byId(targetId) : null;
-      tgt && tgt.classList.remove("hidden");
-    });
-  });
-
-  // Server Domain dropdowns
-  ["vmess","vless","trojan","ss"].forEach(kind => {
-    const sel = byId(`${kind}-server-domain`);
-    if (!sel) return;
-    sel.name = sel.name || "server-domain";
-    sel.innerHTML = "";
-    serverDomains.forEach(d => {
-      const o = document.createElement("option");
-      o.value = d; o.textContent = d; sel.appendChild(o);
-    });
-    if (serverDomains.length) sel.value = serverDomains[0];
-    sel.addEventListener("change", function(){ selectedServerDomain = this.value; });
-  });
-
-  // Bug options + toggle Manual/Wildcard
-  populateBugOptions();
-
-  const bugIds = ["vmess","vless","trojan","ss"];
-  bugIds.forEach((k, idx) => {
-    const sel = byId(`${k}-bug`);
-    if (!sel) return;
-
-    const manualBox = byId(`${k}-manual-bug-container`);
-    const manualInp = byId(`${k}-manual-bug`);
-    const wildWrap  = byId(`${k}-wildcard-container`);
-    const wildCbx   = byId(`${k}-wildcard`);
-
-    sel.addEventListener("change", function(){
-      if (this.value === "manual"){
-        manualBox && manualBox.classList.add("show");
-        wildWrap  && wildWrap.classList.remove("show");
-        if (wildCbx){ wildCbx.checked = false; wildCbx.disabled = true; }
-      } else if (this.value !== ""){
-        manualBox && manualBox.classList.remove("show");
-        wildWrap  && wildWrap.classList.add("show");
-        if (wildCbx) wildCbx.disabled = false;
-      } else {
-        manualBox && manualBox.classList.remove("show");
-        wildWrap  && wildWrap.classList.remove("show");
-        if (wildCbx){ wildCbx.checked = false; wildCbx.disabled = false; }
-      }
-    });
-
-    manualInp && manualInp.addEventListener("input", () => {
-      if (wildCbx) wildCbx.disabled = true;
-    });
-  });
-
-  // Form submitters
-  ["vmess","vless","trojan","ss"].forEach(kind => {
-    const form = byId(`${kind}-account-form`);
-    if (!form) return;
-
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-
-      const fd = new FormData(form);
-      const security = String(fd.get("security") || "tls"); // tls|ntls
-      const selectedDomain = String(fd.get("server-domain") || selectedServerDomain || serverDomains[0] || "");
-      const isTLS = (security === "tls");
-      const port = isTLS ? 443 : 80;
-
-      // BUG/SNI
-      let customBug = fd.get("bug") ? String(fd.get("bug")).trim() : "";
-      if (customBug === "manual") {
-        const manual = byId(`${kind}-manual-bug`);
-        const v = (manual && manual.value || "").trim();
-        customBug = v || "";
-      }
-      const wildcardCbx = byId(`${kind}-wildcard`);
-      const useWildcard = !!(wildcardCbx && wildcardCbx.checked);
-
-      const server = selectedDomain;             // selalu domain server
-      let host = selectedDomain;                 // host header default
-      if (customBug) host = useWildcard ? `${customBug}.${selectedDomain}` : customBug;
-      const sni = isTLS ? host : "";
-
-      // Path + Name
-      const name = encodeURIComponent(String(fd.get("name") || ""));
-      const path = encodeURIComponent(String(fd.get("path") || "/"));
-
-      // Build links
-      let url = "";
-      if (kind === "vmess"){
-        const vmessConfig = {
-          v: "2",
-          ps: fd.get("name"),
-          add: server,
-          port,
-          id: fd.get("uuid") || defaultUUID,
-          aid: "0",
-          net: "ws",
-          type: "none",
-          host,
-          path: decodeURIComponent(path),
-          tls: isTLS ? "tls" : "",
-          scy: "zero",
-        };
-        if (isTLS) vmessConfig.sni = sni;
-        url = "vmess://" + btoa(JSON.stringify(vmessConfig));
-      }
-      else if (kind === "vless"){
-        const uuid = fd.get("uuid") || defaultUUID;
-        const base = `vless://${uuid}@${server}:${port}?encryption=none&security=${security}&type=ws&host=${host}&path=${path}`;
-        url = isTLS ? `${base}&sni=${encodeURIComponent(sni)}#${name}` : `${base}#${name}`;
-      }
-      else if (kind === "trojan"){
-        const pass = fd.get("password") || "";
-        const base = `trojan://${pass}@${server}:${port}?security=${security}&type=ws&host=${host}&path=${path}`;
-        url = isTLS ? `${base}&sni=${encodeURIComponent(sni)}#${name}` : `${base}#${name}`;
-      }
-      else if (kind === "ss"){
-        const pass = fd.get("password") || "";
-        const method = "none";
-        const userInfo = btoa(`${method}:${pass}`);
-        const base = `ss://${userInfo}@${server}:${port}?encryption=none&type=ws&host=${host}&path=${path}&security=${security}`;
-        url = isTLS ? `${base}&sni=${encodeURIComponent(sni)}#${name}` : `${base}#${name}`;
-      }
-
-      const out = byId("connection-url");
-      out && (out.textContent = url);
-
-      generateQRCode(url);
-
-      accountCreationSection && accountCreationSection.classList.add("hidden");
-      resultSection && resultSection.classList.remove("hidden");
-    });
-  });
-
-  const copyBtn = byId("copy-url");
-  copyBtn && copyBtn.addEventListener("click", function(){
-    const txt = (byId("connection-url")?.textContent || "");
-    navigator.clipboard.writeText(txt).then(() => {
-      this.innerHTML = '<i class="fas fa-check mr-1"></i> Copied!';
-      setTimeout(() => this.innerHTML = '<i class="far fa-copy mr-1"></i> Copy', 1500);
-    }).catch(console.error);
-  });
-
-  const dlBtn = byId("download-qr");
-  dlBtn && dlBtn.addEventListener("click", downloadQRCode);
-});
-
-// ====== UI helpers ======
-function populateBugOptions(){
-  ["vmess","vless","trojan","ss"].forEach(kind => {
-    const sel = byId(`${kind}-bug`);
-    if (!sel) return;
-    sel.innerHTML = "";
-    bugOptions.forEach(opt => {
-      const o = document.createElement("option");
-      o.value = opt.value; o.textContent = opt.label; sel.appendChild(o);
-    });
-    const manual = document.createElement("option");
-    manual.value = "manual"; manual.textContent = "Manual";
-    sel.appendChild(manual);
-  });
-}
-
-function showProxyListSection(){
-  proxyListSection && proxyListSection.classList.remove("hidden");
-  accountCreationSection && accountCreationSection.classList.add("hidden");
-  resultSection && resultSection.classList.add("hidden");
-}
-
-function showAccountCreationSection(){
-  proxyListSection && proxyListSection.classList.add("hidden");
-  accountCreationSection && accountCreationSection.classList.remove("hidden");
-  resultSection && resultSection.classList.add("hidden");
-}
-
-// ====== QR Code (safe fallbacks) ======
-function generateQRCode(text){
-  const wrap = byId("qrcode");
-  if (!wrap) return;
-  wrap.innerHTML = "";
-
-  if (QRCode && typeof QRCode.toCanvas === "function"){
-    try{
-      QRCode.toCanvas(wrap, text, { width:200, margin:1, color:{dark:"#000000", light:"#FFFFFF"} },
-        (err)=>{ if (err) { console.error(err); generateQRCodeFallback(text, wrap); }});
-      return;
-    }catch(e){ console.error(e); }
-  }
-  generateQRCodeFallback(text, wrap);
-}
-function generateQRCodeFallback(text, container){
-  if (QRCode && typeof QRCode.toString === "function"){
-    try{
-      QRCode.toString(text, { type:"svg", width:200, margin:1, color:{dark:"#000000", light:"#FFFFFF"} },
-        (err, svg)=>{ if (err || !svg){ console.error(err); generateQRCodeLastResort(text, container); }
-                      else { container.innerHTML = svg; }});
-      return;
-    }catch(e){ console.error(e); }
-  }
-  generateQRCodeLastResort(text, container);
-}
-function generateQRCodeLastResort(text, container){
-  try{
-    const url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(text)}`;
-    const img = document.createElement("img");
-    img.src = url; img.alt = "QR Code"; img.width = 200; img.height = 200;
-    img.onerror = () => container.innerHTML = '<div class="text-center text-rose-500">Failed to generate QR</div>';
-    container.innerHTML = ""; container.appendChild(img);
-  }catch(e){
-    console.error(e);
-    container.innerHTML = '<div class="text-center text-rose-500">Failed to generate QR</div>';
-  }
-}
-function downloadQRCode(){
-  const q = byId("qrcode");
-  if (!q) return;
-  const canvas = q.querySelector("canvas");
-  const img    = q.querySelector("img");
-  const svg    = q.querySelector("svg");
-  let url = null;
-  try{
-    if (canvas) url = canvas.toDataURL("image/png");
-    else if (img) url = img.src;
-    else if (svg){
-      const data = new XMLSerializer().serializeToString(svg);
-      const blob = new Blob([data], {type:"image/svg+xml;charset=utf-8"});
-      url = URL.createObjectURL(blob);
+  <style>
+    /* ====== Upgrade tampilan: neon gradient + glass ====== */
+    :root{
+      --ring: 255,108,255; /* pink neon */
+      --ring2: 80,180,255; /* cyan neon */
     }
-  }catch(e){ console.error(e); }
-  if (!url){ alert("Failed to download QR"); return; }
-  const a = document.createElement("a");
-  a.href = url; a.download = "qrcode.png"; document.body.appendChild(a); a.click(); a.remove();
-  if (url.startsWith("blob:")) URL.revokeObjectURL(url);
-}
-
-// ====== Proxy List ======
-function displayFallbackProxyList(){
-  proxyList = [{ ip:"103.6.207.108", port:"8080", country:"ID", provider:"PT Pusat Media Indonesia" }];
-  filteredProxyList = [...proxyList];
-  renderProxyList();
-}
-
-function processProxyData(text){
-  const lines = (text || "").split(/\r?\n/).filter(l => l.trim() !== "");
-  if (!lines.length){
-    noProxiesMessage && noProxiesMessage.classList.remove("hidden");
-    return;
-  }
-  let delimiter = ",";
-  const f = lines[0];
-  if (f.includes("\t")) delimiter = "\t";
-  else if (f.includes("|")) delimiter = "|";
-  else if (f.includes(";")) delimiter = ";";
-
-  proxyList = lines.map(line => {
-    const parts = line.split(delimiter);
-    if (parts.length >= 2){
-      return {
-        ip: (parts[0]||"").trim(),
-        port: (parts[1]||"").trim(),
-        country: parts[2] ? parts[2].trim() : "Unknown",
-        provider: parts[3] ? parts[3].trim() : "Unknown Provider",
-      };
+    body{
+      min-height:100vh;
+      /* animated conic gradient background */
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(80,180,255,.15), transparent 60%),
+        radial-gradient(1000px 500px at 110% 20%, rgba(255,108,255,.12), transparent 60%),
+        conic-gradient(from var(--spin,0deg) at 50% -20%, rgba(255,108,255,.08), rgba(80,180,255,.08), rgba(255,108,255,.08));
+      animation: spinBg 18s linear infinite;
     }
-    return null;
-  }).filter(Boolean);
+    @keyframes spinBg{ to { --spin: 360deg; } }
 
-  if (!proxyList.length){
-    noProxiesMessage && noProxiesMessage.classList.remove("hidden");
-    displayFallbackProxyList();
-    return;
-  }
-
-  currentPage = 1;
-  filteredProxyList = [...proxyList];
-  renderProxyList();
-}
-
-function renderProxyList(){
-  if (!proxyListContainer) return;
-  proxyListContainer.innerHTML = "";
-
-  if (!filteredProxyList.length){
-    noProxiesMessage && noProxiesMessage.classList.remove("hidden");
-    paginationContainer && (paginationContainer.innerHTML = "");
-    proxyCountInfo && (proxyCountInfo.textContent = "");
-    return;
-  }
-  noProxiesMessage && noProxiesMessage.classList.add("hidden");
-
-  const totalPages = Math.ceil(filteredProxyList.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex   = Math.min(startIndex + itemsPerPage, filteredProxyList.length);
-  const current    = filteredProxyList.slice(startIndex, endIndex);
-
-  current.forEach((proxy, idx) => {
-    const actualIndex = startIndex + idx;
-
-    const row = document.createElement("div");
-    row.className = "row";
-
-    const ip = document.createElement("div");
-    ip.textContent = `${proxy.ip}:${proxy.port}`;
-
-    const country = document.createElement("div");
-    country.textContent = proxy.country;
-
-    const isp = document.createElement("div");
-    isp.textContent = proxy.provider;
-
-    const action = document.createElement("div");
-    action.className = "text-right";
-    const btn = document.createElement("button");
-    btn.className = "create-account-btn primary-btn py-2 px-3 text-xs";
-    btn.setAttribute("data-index", actualIndex);
-    btn.textContent = "Create";
-    action.appendChild(btn);
-
-    row.appendChild(ip); row.appendChild(country); row.appendChild(isp); row.appendChild(action);
-    proxyListContainer.appendChild(row);
-  });
-
-  // Bind Create buttons
-  document.querySelectorAll(".create-account-btn").forEach(b => {
-    b.addEventListener("click", function(){
-      const index = parseInt(this.getAttribute("data-index"), 10);
-      selectProxy(index);
-      showAccountCreationSection();
-    });
-  });
-
-  renderPagination(totalPages);
-
-  proxyCountInfo && (proxyCountInfo.textContent = `Showing ${startIndex + 1}-${endIndex} of ${filteredProxyList.length} proxies`);
-}
-
-function renderPagination(totalPages){
-  if (!paginationContainer) return;
-  paginationContainer.innerHTML = "";
-  if (totalPages <= 1) return;
-
-  const mkBtn = (label, disabled, onClick, extra="") => {
-    const b = document.createElement("button");
-    b.className = `pagination-btn ${disabled ? "disabled" : ""} ${extra}`;
-    b.innerHTML = label; b.disabled = !!disabled;
-    if (!disabled) b.addEventListener("click", onClick);
-    return b;
-  };
-
-  paginationContainer.appendChild(mkBtn('<i class="fas fa-chevron-left"></i>', currentPage===1, ()=>{
-    currentPage--; renderProxyList();
-  }));
-
-  const maxVisible = window.innerWidth < 640 ? 3 : 5;
-  let start = Math.max(1, currentPage - Math.floor(maxVisible/2));
-  let end   = Math.min(totalPages, start + maxVisible - 1);
-  if (end - start + 1 < maxVisible) start = Math.max(1, end - maxVisible + 1);
-
-  const addEllipsis = () => {
-    const sp = document.createElement("span");
-    sp.className = "px-1 text-gray-400";
-    sp.textContent = "...";
-    paginationContainer.appendChild(sp);
-  };
-
-  if (start > 1){
-    paginationContainer.appendChild(mkBtn("1", false, ()=>{ currentPage = 1; renderProxyList(); }));
-    if (start > 2) addEllipsis();
-  }
-
-  for (let i = start; i <= end; i++){
-    paginationContainer.appendChild(
-      mkBtn(String(i), false, ()=>{ currentPage = i; renderProxyList(); }, i===currentPage ? "active" : "")
-    );
-  }
-
-  if (end < totalPages){
-    if (end < totalPages - 1) addEllipsis();
-    paginationContainer.appendChild(mkBtn(String(totalPages), false, ()=>{ currentPage = totalPages; renderProxyList(); }));
-  }
-
-  paginationContainer.appendChild(mkBtn('<i class="fas fa-chevron-right"></i>', currentPage===totalPages, ()=>{
-    currentPage++; renderProxyList();
-  }));
-}
-
-async function selectProxy(index){
-  selectedProxy = filteredProxyList[index];
-  if (!selectedProxy) return;
-
-  const sIP = byId("selected-ip"), sPort=byId("selected-port"), sCountry=byId("selected-country"), sProv=byId("selected-provider");
-  sIP && (sIP.textContent = selectedProxy.ip);
-  sPort && (sPort.textContent = selectedProxy.port);
-  sCountry && (sCountry.textContent = selectedProxy.country);
-  sProv && (sProv.textContent = selectedProxy.provider);
-
-  const baseName = `${selectedProxy.country} - ${selectedProxy.provider}`;
-  const path = pathTemplate.replace("{ip}", selectedProxy.ip).replace("{port}", selectedProxy.port);
-
-  ["vmess","vless","trojan","ss"].forEach(kind => {
-    const pathInp = byId(`${kind}-path`);
-    pathInp && (pathInp.value = path);
-
-    const secSel = byId(`${kind}-security`);
-    const nameInp = byId(`${kind}-name`);
-    if (secSel && nameInp){
-      const updateName = () => {
-        const tlsType = (secSel.value === "tls") ? "TLS" : "NTLS";
-        nameInp.value = `${baseName} [${kind.toUpperCase()}-${tlsType}]`;
-      };
-      updateName();
-      // Rebind cleanly
-      const clone = secSel.cloneNode(true);
-      secSel.parentNode.replaceChild(clone, secSel);
-      clone.addEventListener("change", updateName);
+    .container { width:100%; max-width: 520px; padding: 0 .75rem; margin-bottom: 1.25rem; }
+    .card{
+      position:relative;
+      border-radius: 18px;
+      background: rgba(15,23,42, .55);               /* slate-900 w/ alpha */
+      box-shadow:
+        0 10px 30px rgba(0,0,0,.45),
+        0 0 0 1px rgba(148,163,184,.15);             /* subtle stroke */
+      backdrop-filter: blur(14px);                    /* glass effect */
+      -webkit-backdrop-filter: blur(14px);            /* Safari */
     }
-  });
-
-  // status ping (optional; tidak memblokir UI bila error)
-  checkProxyStatus(selectedProxy);
-}
-
-function checkProxyStatus(proxy){
-  const start = performance.now();
-  const url = `https://api.jb8fd7grgd.workers.dev/${proxy.ip}:${proxy.port}`;
-  const box = byId("proxy-status-container"),
-        load = byId("proxy-status-loading"),
-        ok = byId("proxy-status-active"),
-        dead = byId("proxy-status-dead"),
-        unk = byId("proxy-status-unknown"),
-        lat = byId("proxy-latency");
-
-  box && box.classList.remove("hidden");
-  load && load.classList.remove("hidden");
-  ok && ok.classList.add("hidden");
-  dead && dead.classList.add("hidden");
-  unk && unk.classList.add("hidden");
-
-  fetch(url).then(r => r.json()).then(data => {
-    const ms = Math.floor(performance.now() - start);
-    load && load.classList.add("hidden");
-    const item = Array.isArray(data) ? data[0] : data;
-    if (item && item.proxyip === true){
-      ok && ok.classList.remove("hidden");
-      lat && (lat.textContent = `${ms}ms`);
-    }else{
-      dead && dead.classList.remove("hidden");
+    .title-container{
+      padding: 2.25rem 1.5rem 1rem;
+      text-align:center;
     }
-  }).catch(err => {
-    console.warn("status check error:", err);
-    load && load.classList.add("hidden");
-    unk && unk.classList.remove("hidden");
-  });
-}
-
-// ====== Loader with resilient CORS ======
-function loadProxyList(url){
-  loadingIndicator && loadingIndicator.classList.remove("hidden");
-  proxyListContainer && (proxyListContainer.innerHTML = "");
-  noProxiesMessage && noProxiesMessage.classList.add("hidden");
-
-  const attempts = [
-    async () => { // direct
-      const r = await fetch(url, { cache: "no-store" });
-      if (!r.ok) throw new Error("Direct fetch failed");
-      return await r.text();
-    },
-    async () => { // allorigins
-      const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-      if (!r.ok) throw new Error("AllOrigins failed");
-      const j = await r.json();
-      return j.contents;
-    },
-    async () => { // cors.sh
-      const r = await fetch(`https://cors.sh/${url}`, {
-        headers: { "x-cors-api-key": "temp_" + Math.random().toString(36).slice(2,10) }
-      });
-      if (!r.ok) throw new Error("cors.sh failed");
-      return await r.text();
-    },
-    async () => { // cors-anywhere (sering 403; let it try)
-      const r = await fetch(`https://cors-anywhere.herokuapp.com/${url}`);
-      if (!r.ok) throw new Error("cors-anywhere failed");
-      return await r.text();
-    },
-    async () => { // r.jina.ai mirror (HTTP path)
-      // mirror perlu http; untuk raw GH pakai http://raw.githubusercontent.com
-      const httpUrl = url.replace(/^https:/, "http:");
-      const r = await fetch(`https://r.jina.ai/http/${httpUrl.replace(/^http:\/\//, "")}`);
-      if (!r.ok) throw new Error("jina mirror failed");
-      return await r.text();
-    },
-  ];
-
-  (async function run(i=0){
-    if (i >= attempts.length){
-      console.error("All sources failed. Showing fallback.");
-      loadingIndicator && loadingIndicator.classList.add("hidden");
-      noProxiesMessage && noProxiesMessage.classList.remove("hidden");
-      displayFallbackProxyList();
-      return;
+    .title{
+      font-family: "Orbitron", system-ui, sans-serif;
+      letter-spacing: .04em;
+      font-size: 1.75rem;
+      line-height: 1.1;
+      background: linear-gradient(90deg, rgb(var(--ring)) 0%, rgb(var(--ring2)) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 0 18px rgba(120,180,255,.25);
+      margin: 0;
     }
-    try{
-      const text = await attempts[i]();
-      processProxyData(text);
-      loadingIndicator && loadingIndicator.classList.add("hidden");
-    }catch(err){
-      console.warn(`source[${i}] error:`, err);
-      run(i+1);
+    .subtitle{
+      margin-top: .25rem;
+      font-size: .9rem;
+      color: #a5b4fc;
+      opacity:.85;
     }
-  })();
-}
+
+    /* Badge ORANG_LEMAH */
+    .brand-badge{
+      display:inline-flex; align-items:center; gap:.5rem;
+      margin-top: .75rem;
+      padding: .35rem .65rem;
+      border-radius: 999px;
+      font-family: "Share Tech Mono", ui-monospace, monospace;
+      font-size: .72rem; letter-spacing: .08em;
+      color: #e2e8f0;
+      background:
+        linear-gradient( to right,
+          rgba(255,108,255,.18), rgba(80,180,255,.18) );
+      box-shadow:
+        0 0 0 1px rgba(148,163,184,.18) inset,
+        0 6px 20px rgba(80,180,255,.12);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+    .brand-dot{
+      width:8px; height:8px; border-radius:999px;
+      background: radial-gradient(circle, #fff 0 35%, rgba(255,255,255,.0) 60%),
+                  linear-gradient(90deg, rgb(var(--ring)), rgb(var(--ring2)));
+      box-shadow: 0 0 10px rgba(80,180,255,.65), 0 0 18px rgba(255,108,255,.45);
+    }
+
+    /* Buttons slight glow */
+    .primary-btn{
+      box-shadow: 0 0 0 1px rgba(148,163,184,.18) inset, 0 6px 20px rgba(80,180,255,.12);
+    }
+    .primary-btn:hover{
+      box-shadow: 0 0 0 1px rgba(148,163,184,.20) inset, 0 8px 26px rgba(80,180,255,.18);
+      transform: translateY(-1px);
+    }
+    .glass-input, .glass-select, .glass-code{
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    /* Footer polish */
+    .footer{
+      border-top: 1px solid rgba(148,163,184,.15);
+      background: linear-gradient(180deg, rgba(2,6,23,.25), rgba(2,6,23,.0));
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="tech-detail tech-detail-1"></div>
+      <div class="tech-detail tech-detail-2"></div>
+      <div class="tech-detail tech-detail-3"></div>
+
+      <div class="title-container">
+        <h1 class="title">AFRCloud-NET</h1>
+        <p class="subtitle">Advanced Link Generator</p>
+        <span class="brand-badge"><span class="brand-dot"></span> ORANG_LEMAH</span>
+      </div>
+
+      <div class="p-4">
+        <div id="proxy-list-section">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5">
+            <div class="flex items-center mb-3 sm:mb-0">
+              <i class="fas fa-server mr-2 text-indigo-400"></i>
+              <h2 class="text-xl font-semibold">Proxy List</h2>
+            </div>
+            <div class="flex flex-col sm:flex-row w-full sm:w-auto space-y-2 sm:space-y-0 sm:space-x-3">
+              <button id="refresh-btn" class="primary-btn py-2 px-4 rounded-lg flex items-center justify-center text-sm">
+                <i class="fas fa-sync-alt mr-2"></i>Refresh
+              </button>
+              <button id="custom-url-btn" class="secondary-btn py-2 px-4 rounded-lg flex items-center justify-center text-sm">
+                <i class="fas fa-link mr-2"></i>URL
+              </button>
+            </div>
+          </div>
+
+          <div id="custom-url-input" class="mb-5 hidden">
+            <div class="flex">
+              <input
+                type="text"
+                id="proxy-url"
+                class="flex-1 px-4 py-2.5 glass-input rounded-l-lg text-sm"
+                placeholder="Enter custom proxy list URL"
+                value="https://raw.githubusercontent.com/AFRcloud/ProxyList/refs/heads/main/ProxyList.txt"
+              />
+              <button id="load-custom-url" class="primary-btn px-4 py-2.5 rounded-r-lg">Load</button>
+            </div>
+          </div>
+
+          <div id="loading-indicator" class="text-center py-10 hidden">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <p class="text-indigo-300 text-sm">Loading proxy list...</p>
+          </div>
+
+          <div class="mb-4">
+            <div class="relative">
+              <input
+                type="text"
+                id="search-input"
+                class="w-full pl-10 pr-4 py-2.5 glass-input rounded-lg text-sm"
+                placeholder="Search by provider or country..."
+              />
+              <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <i class="fas fa-search text-gray-400"></i>
+              </div>
+            </div>
+          </div>
+
+          <div id="proxy-list-container" class="mt-4"></div>
+
+          <div id="pagination-container" class="flex justify-center items-center mt-6 space-x-2"></div>
+
+          <div id="proxy-count-info" class="text-center mt-3 text-sm text-gray-400"></div>
+
+          <div id="no-proxies-message" class="text-center py-10 hidden">
+            <i class="fas fa-exclamation-circle text-rose-400 text-4xl mb-3"></i>
+            <p class="text-gray-300 text-sm">No proxies found. Please refresh or try a different URL.</p>
+          </div>
+        </div>
+
+        <div id="account-creation-section" class="mt-6 hidden">
+          <div class="pt-4">
+            <div class="divider mb-6"></div>
+            <div class="flex justify-between items-center mb-5">
+              <div class="flex items-center">
+                <i class="fas fa-user-plus mr-2 text-indigo-400"></i>
+                <h2 class="text-xl font-semibold">Create Account</h2>
+              </div>
+              <button id="back-to-list" class="flex items-center text-indigo-400 hover:text-indigo-300 transition-colors text-sm">
+                <i class="fas fa-arrow-left mr-2"></i> Back to List
+              </button>
+            </div>
+
+            <div class="card p-5 mb-6 overflow-hidden relative">
+              <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-indigo-500/5 to-transparent rounded-bl-full pointer-events-none"></div>
+
+              <h3 class="text-base font-medium text-indigo-400 mb-4 flex items-center">
+                <i class="fas fa-server mr-2"></i>
+                Selected Proxy
+              </h3>
+
+              <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="flex items-center space-x-2 bg-slate-800/40 p-3 rounded-lg border border-slate-700/30">
+                  <i class="fas fa-building text-indigo-400/70 w-5 text-center"></i>
+                  <div>
+                    <div class="text-xs text-gray-400">Provider</div>
+                    <div id="selected-provider" class="text-sm font-medium text-white">-</div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-2 bg-slate-800/40 p-3 rounded-lg border border-slate-700/30">
+                  <i class="fas fa-globe-americas text-indigo-400/70 w-5 text-center"></i>
+                  <div>
+                    <div class="text-xs text-gray-400">Country</div>
+                    <div id="selected-country" class="text-sm font-medium text-white">-</div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-2 bg-slate-800/40 p-3 rounded-lg border border-slate-700/30">
+                  <i class="fas fa-network-wired text-indigo-400/70 w-5 text-center"></i>
+                  <div>
+                    <div class="text-xs text-gray-400">IP</div>
+                    <div id="selected-ip" class="text-sm font-medium text-white">-</div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-2 bg-slate-800/40 p-3 rounded-lg border border-slate-700/30">
+                  <i class="fas fa-plug text-indigo-400/70 w-5 text-center"></i>
+                  <div>
+                    <div class="text-xs text-gray-400">Port</div>
+                    <div id="selected-port" class="text-sm font-medium text-white">-</div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="proxy-status-container" class="hidden">
+                <div id="proxy-status-active" class="hidden rounded-lg p-3 bg-gradient-to-r from-emerald-900/20 to-emerald-800/10 border border-emerald-500/20">
+                  <div class="flex items-center">
+                    <div class="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mr-3 border border-emerald-500/30">
+                      <i class="fas fa-check text-emerald-400"></i>
+                    </div>
+                    <div>
+                      <div class="text-sm font-medium text-emerald-400">ACTIVE</div>
+                      <div class="text-xs text-gray-400">Latency: <span id="proxy-latency" class="text-amber-400">0ms</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="proxy-status-dead" class="hidden rounded-lg p-3 bg-gradient-to-r from-rose-900/20 to-rose-800/10 border border-rose-500/20">
+                  <div class="flex items-center">
+                    <div class="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center mr-3 border border-rose-500/30">
+                      <i class="fas fa-times text-rose-500"></i>
+                    </div>
+                    <div>
+                      <div class="text-sm font-medium text-rose-500">DEAD</div>
+                      <div class="text-xs text-gray-400">This proxy may not be working</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="proxy-status-unknown" class="hidden rounded-lg p-3 bg-gradient-to-r from-amber-900/20 to-amber-800/10 border border-amber-500/20">
+                  <div class="flex items-center">
+                    <div class="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center mr-3 border border-amber-500/30">
+                      <i class="fas fa-question text-amber-400"></i>
+                    </div>
+                    <div>
+                      <div class="text-sm font-medium text-amber-400">UNKNOWN</div>
+                      <div class="text-xs text-gray-400">Could not check proxy status</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="proxy-status-loading" class="rounded-lg p-3 bg-gradient-to-r from-indigo-900/20 to-indigo-800/10 border border-indigo-500/20">
+                  <div class="flex items-center">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center mr-3 border border-indigo-500/30">
+                      <div class="loading-spinner-sm"></div>
+                    </div>
+                    <div>
+                      <div class="text-sm font-medium text-indigo-400">CHECKING</div>
+                      <div class="text-xs text-gray-400">Verifying proxy status...</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex border-b border-gray-700 mb-6 overflow-x-auto space-x-1 sm:space-x-0">
+              <button class="tab-btn active py-3 px-4 font-medium text-sm focus:outline-none" data-target="vless-form">
+                <i class="fas fa-bolt mr-2"></i>VLESS
+              </button>
+              <button class="tab-btn py-3 px-4 font-medium text-sm focus:outline-none" data-target="trojan-form">
+                <i class="fas fa-user-secret mr-2"></i>Trojan
+              </button>
+              <button class="tab-btn py-3 px-4 font-medium text-sm focus:outline-none" data-target="vmess-form">
+                <i class="fas fa-shield-alt mr-2"></i>VMess
+              </button>
+              <button class="tab-btn py-3 px-4 font-medium text-sm focus:outline-none" data-target="ss-form">
+                <i class="fas fa-mask mr-2"></i>SS
+              </button>
+            </div>
+
+            <div id="vmess-form" class="protocol-form hidden">
+              <form id="vmess-account-form" class="space-y-5">
+                <div>
+                  <label for="vmess-name" class="block text-sm font-medium text-gray-300 mb-2">Account Name</label>
+                  <input type="text" id="vmess-name" name="name" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
+                </div>
+
+                <div>
+                  <label for="vmess-uuid" class="block text-sm font-medium text-gray-300 mb-2">UUID</label>
+                  <div class="flex">
+                    <input type="text" id="vmess-uuid" name="uuid" class="flex-1 px-4 py-2.5 glass-input rounded-l-lg text-sm" value="fccdaaae-af39-41a7-9fde-fd32a48278cf" required />
+                    <button type="button" onclick="generateUUID('vmess-uuid')" class="secondary-btn px-4 py-2.5 rounded-r-lg hover:bg-slate-700">
+                      <i class="fas fa-sync-alt"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label for="vmess-path" class="block text-sm font-medium text-gray-300 mb-2">Path</label>
+                  <input type="text" id="vmess-path" name="path" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
+                </div>
+
+                <div>
+                  <label for="vmess-security" class="block text-sm font-medium text-gray-300 mb-2">TLS</label>
+                  <select id="vmess-security" name="security" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm">
+                    <option value="tls">TLS</option>
+                    <option value="none">None</option>
+                  </select>
+                  <input type="hidden" id="vmess-encryption" name="encryption" value="zero" />
+                </div>
+
+                <div>
+                  <label for="vmess-server-domain" class="block text-sm font-medium text-gray-300 mb-2">Server Domain</label>
+                  <select id="vmess-server-domain" name="server-domain" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm"></select>
+                </div>
+
+                <div>
+                  <label for="vmess-bug" class="block text-sm font-medium text-gray-300 mb-2">Custom Bug <span class="text-xs text-gray-500">(opsional)</span></label>
+                  <input type="text" id="vmess-bug" name="bug" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm" />
+                  <div id="vmess-manual-bug-container" class="wildcard-container">
+                    <input type="text" id="vmess-manual-bug" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm mt-2" placeholder="Enter custom bug domain" />
+                  </div>
+                  <div id="vmess-wildcard-container" class="wildcard-container">
+                    <div class="checkbox-container">
+                      <input type="checkbox" id="vmess-wildcard" name="wildcard" />
+                      <label for="vmess-wildcard">Gunakan Wildcard (bug.domain.com)</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pt-2">
+                  <button type="submit" class="w-full primary-btn py-3 px-4 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-plus-circle mr-2"></i> Create VMess Account
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div id="vless-form" class="protocol-form">
+              <form id="vless-account-form" class="space-y-5">
+                <div>
+                  <label for="vless-name" class="block text-sm font-medium text-gray-300 mb-2">Account Name</label>
+                  <input type="text" id="vless-name" name="name" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
+                </div>
+
+                <div>
+                  <label for="vless-uuid" class="block text-sm font-medium text-gray-300 mb-2">UUID</label>
+                  <div class="flex">
+                    <input type="text" id="vless-uuid" name="uuid" class="flex-1 px-4 py-2.5 glass-input rounded-l-lg text-sm" value="fccdaaae-af39-41a7-9fde-fd32a48278cf" required />
+                    <button type="button" onclick="generateUUID('vless-uuid')" class="secondary-btn px-4 py-2.5 rounded-r-lg hover:bg-slate-700">
+                      <i class="fas fa-sync-alt"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label for="vless-path" class="block text-sm font-medium text-gray-300 mb-2">Path</label>
+                  <input type="text" id="vless-path" name="path" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
+                </div>
+
+                <div>
+                  <label for="vless-security" class="block text-sm font-medium text-gray-300 mb-2">TLS</label>
+                  <select id="vless-security" name="security" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm">
+                    <option value="tls">TLS</option>
+                    <option value="none">None</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="vless-server-domain" class="block text-sm font-medium text-gray-300 mb-2">Server Domain</label>
+                  <select id="vless-server-domain" name="server-domain" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm"></select>
+                </div>
+
+                <div>
+                  <label for="vless-bug" class="block text-sm font-medium text-gray-300 mb-2">Custom Bug <span class="text-xs text-gray-500">(opsional)</span></label>
+                  <input type="text" id="vless-bug" name="bug" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm" />
+                  <div id="vless-manual-bug-container" class="wildcard-container">
+                    <input type="text" id="vless-manual-bug" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm mt-2" placeholder="Enter custom bug domain" />
+                  </div>
+                  <div id="vless-wildcard-container" class="wildcard-container">
+                    <div class="checkbox-container">
+                      <input type="checkbox" id="vless-wildcard" name="wildcard" />
+                      <label for="vless-wildcard">Gunakan Wildcard (bug.domain.com)</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pt-2">
+                  <button type="submit" class="w-full primary-btn py-3 px-4 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-plus-circle mr-2"></i> Create VLESS Account
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div id="trojan-form" class="protocol-form hidden">
+              <form id="trojan-account-form" class="space-y-5">
+                <div>
+                  <label for="trojan-name" class="block text-sm font-medium text-gray-300 mb-2">Account Name</label>
+                  <input type="text" id="trojan-name" name="name" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
+                </div>
+
+                <div>
+                  <label for="trojan-password" class="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                  <div class="flex">
+                    <input type="text" id="trojan-password" name="password" class="flex-1 px-4 py-2.5 glass-input rounded-l-lg text-sm" value="fccdaaae-af39-41a7-9fde-fd32a48278cf" required />
+                    <button type="button" onclick="generatePassword('trojan-password')" class="secondary-btn px-4 py-2.5 rounded-r-lg hover:bg-slate-700">
+                      <i class="fas fa-sync-alt"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label for="trojan-path" class="block text-sm font-medium text-gray-300 mb-2">Path</label>
+                  <input type="text" id="trojan-path" name="path" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
+                </div>
+
+                <div>
+                  <label for="trojan-security" class="block text-sm font-medium text-gray-300 mb-2">TLS</label>
+                  <select id="trojan-security" name="security" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm">
+                    <option value="tls">TLS</option>
+                    <option value="none">None</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="trojan-server-domain" class="block text-sm font-medium text-gray-300 mb-2">Server Domain</label>
+                  <select id="trojan-server-domain" name="server-domain" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm"></select>
+                </div>
+
+                <div>
+                  <label for="trojan-bug" class="block text-sm font-medium text-gray-300 mb-2">Custom Bug <span class="text-xs text-gray-500">(opsional)</span></label>
+                  <input type="text" id="trojan-bug" name="bug" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm" />
+                  <div id="trojan-manual-bug-container" class="wildcard-container">
+                    <input type="text" id="trojan-manual-bug" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm mt-2" placeholder="Enter custom bug domain" />
+                  </div>
+                  <div id="trojan-wildcard-container" class="wildcard-container">
+                    <div class="checkbox-container">
+                      <input type="checkbox" id="trojan-wildcard" name="wildcard" />
+                      <label for="trojan-wildcard">Gunakan Wildcard (bug.domain.com)</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pt-2">
+                  <button type="submit" class="w-full primary-btn py-3 px-4 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-plus-circle mr-2"></i> Create Trojan Account
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div id="ss-form" class="protocol-form hidden">
+              <form id="ss-account-form" class="space-y-5">
+                <div>
+                  <label for="ss-name" class="block text-sm font-medium text-gray-300 mb-2">Account Name</label>
+                  <input type="text" id="ss-name" name="name" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
+                </div>
+
+                <div>
+                  <label for="ss-password" class="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                  <div class="flex">
+                    <input type="text" id="ss-password" name="password" class="flex-1 px-4 py-2.5 glass-input rounded-l-lg text-sm" value="fccdaaae-af39-41a7-9fde-fd32a48278cf" required />
+                    <button type="button" onclick="generatePassword('ss-password')" class="secondary-btn px-4 py-2.5 rounded-r-lg hover:bg-slate-700">
+                      <i class="fas fa-sync-alt"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label for="ss-path" class="block text-sm font-medium text-gray-300 mb-2">Path</label>
+                  <input type="text" id="ss-path" name="path" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm" readonly />
+                </div>
+
+                <div>
+                  <label for="ss-security" class="block text-sm font-medium text-gray-300 mb-2">TLS</label>
+                  <select id="ss-security" name="security" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm">
+                    <option value="tls">TLS</option>
+                    <option value="none">None</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="ss-server-domain" class="block text-sm font-medium text-gray-300 mb-2">Server Domain</label>
+                  <select id="ss-server-domain" name="server-domain" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm"></select>
+                </div>
+
+                <div>
+                  <label for="ss-bug" class="block text-sm font-medium text-gray-300 mb-2">Custom Bug <span class="text-xs text-gray-500">(opsional)</span></label>
+                  <input type="text" id="ss-bug" name="bug" class="w-full px-4 py-2.5 glass-select rounded-lg text-sm" />
+                  <div id="ss-manual-bug-container" class="wildcard-container">
+                    <input type="text" id="ss-manual-bug" class="w-full px-4 py-2.5 glass-input rounded-lg text-sm mt-2" placeholder="Enter custom bug domain" />
+                  </div>
+                  <div id="ss-wildcard-container" class="wildcard-container">
+                    <div class="checkbox-container">
+                      <input type="checkbox" id="ss-wildcard" name="wildcard" />
+                      <label for="ss-wildcard">Gunakan Wildcard (bug.domain.com)</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pt-2">
+                  <button type="submit" class="w-full primary-btn py-3 px-4 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-plus-circle mr-2"></i> Create Shadowsocks Account
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div id="result-section" class="mt-6 hidden">
+          <div class="pt-4">
+            <div class="divider mb-6"></div>
+            <div class="flex justify-between items-center mb-5">
+              <div class="flex items-center">
+                <i class="fas fa-check-circle mr-2 text-emerald-400"></i>
+                <h2 class="text-xl font-semibold">Account Created</h2>
+              </div>
+              <button id="back-to-form" class="flex items-center text-indigo-400 hover:text-indigo-300 transition-colors text-sm">
+                <i class="fas fa-arrow-left mr-2"></i> Back
+              </button>
+            </div>
+
+            <div class="card p-5 mb-5">
+              <div class="flex justify-between items-center mb-3">
+                <h3 class="text-base font-medium text-indigo-400">Connection URL</h3>
+                <button id="copy-url" class="flex items-center text-indigo-400 hover:text-indigo-300 text-xs transition-colors">
+                  <i class="far fa-copy mr-1"></i> Copy
+                </button>
+              </div>
+              <div id="connection-url" class="text-xs glass-code p-4 rounded-lg break-all font-mono"></div>
+            </div>
+
+            <div class="card p-5">
+              <div class="flex justify-between items-center mb-3">
+                <h3 class="text-base font-medium text-indigo-400">QR Code</h3>
+                <button id="download-qr" class="flex items-center text-indigo-400 hover:text-indigo-300 text-xs transition-colors">
+                  <i class="fas fa-download mr-1"></i> Download
+                </button>
+              </div>
+              <div class="flex justify-center py-4">
+                <div id="qrcode" class="qrcode-container"></div>
+              </div>
+            </div>
+
+            <div class="mt-6 flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+              <button id="create-new" class="flex-1 primary-btn py-3 px-4 rounded-lg flex items-center justify-center text-sm">
+                <i class="fas fa-plus-circle mr-2"></i> Create Another
+              </button>
+              <button id="back-to-list-from-result" class="flex-1 secondary-btn py-3 px-4 rounded-lg flex items-center justify-center text-sm">
+                <i class="fas fa-list mr-2"></i> Back to List
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="circuit-line circuit-line-1"></div>
+    <div class="circuit-line circuit-line-2"></div>
+    <div class="circuit-line circuit-line-3"></div>
+    <div class="circuit-line circuit-line-4"></div>
+    <div class="circuit-dot circuit-dot-1"></div>
+    <div class="circuit-dot circuit-dot-2"></div>
+    <div class="circuit-dot circuit-dot-3"></div>
+    <div class="circuit-dot circuit-dot-4"></div>
+
+    <div class="footer-logo">AFRCloud-NET</div>
+    <div class="footer-powered">POWERED BY SECURE TECHNOLOGY</div>
+
+    <div class="footer-social">
+      <a href="https://t.me/Noir7R" class="social-link" target="_blank"> @Noir7R </a>
+    </div>
+
+    <div class="footer-social">
+      <a href="https://t.me/inconigto_Mode" class="social-link" target="_blank"> @inconigto_Mode </a>
+      <a href="https://t.me/InconigtoMode" class="social-link" target="_blank"> @InconigtoMode </a>
+    </div>
+
+    <div class="footer-year">© <span id="current-year"></span></div>
+  </footer>
+
+  <div id="donation-button" class="donate-btn">
+    <i class="fas fa-hand-holding-heart"></i>
+  </div>
+
+  <div id="donation-modal" class="donation-modal">
+    <div class="donation-backdrop" id="donation-backdrop"></div>
+    <div class="donation-content" id="donation-content">
+      <div class="donation-border"><div class="donation-border-animation"></div></div>
+      <div class="donation-body">
+        <button id="close-donation" class="close-donation"><i class="fas fa-times"></i></button>
+        <h3 class="donation-title">Support AFRCloud-NET</h3>
+        <p class="donation-text">Your donation helps keep our services running</p>
+        <div class="qris-container">
+          <div class="qris-border"><div class="qris-border-animation"></div></div>
+          <div class="qris-image-container">
+            <img src="https://raw.githubusercontent.com/AFRcloud/Inconigto-Mode/refs/heads/master/web/qris.png" alt="Donation QR Code" class="qris-image" />
+          </div>
+        </div>
+        <p class="donation-small-text">Scan this QR code with your payment app to donate</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" defer></script>
+  
+  <script src="js/common.js?v=2" defer></script>
+  <script src="js/link.js?v=6" defer></script>
+</body>
+</html>
