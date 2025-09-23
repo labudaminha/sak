@@ -1,483 +1,642 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ORANG_LEMAH • Free VLESS Trojan Shadowsocks via CF Proxy</title>
+/**
+ * app.js (patched)
+ * – Robust guards, QRCode safe, stronger CORS fallbacks, no-crash listeners
+ */
 
-  <!-- Tailwind Play CDN (dev/preview) -->
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-  <!-- QRCode library: supports QRCode.toCanvas / QRCode.toString -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+// ====== QRCode global (safe) ======
+const QRCode = (typeof window !== "undefined" && window.QRCode) ? window.QRCode : null;
 
-  <style>
-    /* warna & feel sesuai screenshot */
-    :root{
-      --bg:#0b1627;
-      --bg-soft:#0f1d33;
-      --card:#0f1a2c;
-      --accent:#6a11cb;
-      --accent-2:#2575fc;
-      --muted:#94a3b8;
-      --text:#e5e7eb;
-      --text-dim:#b6c2d1;
-      --ring:#334155;
+// ====== Globals ======
+let proxyList = [];
+let filteredProxyList = [];
+let selectedProxy = null;
+
+const defaultProxyUrl = "https://raw.githubusercontent.com/AFRcloud/ProxyList/refs/heads/main/ProxyList.txt";
+
+// Default + injected server domains
+const DEFAULT_SERVER_DOMAINS = ["sak.labudaminha.web.id", "dia.oranglemah.web.id"];
+(function initServerDomains() {
+  const raw = (typeof window !== "undefined") ? window.SERVER_DOMAINS : undefined;
+  let injected = [];
+  if (Array.isArray(raw)) injected = raw;
+  else if (typeof raw === "string" && raw.trim()) {
+    injected = raw.split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean);
+  }
+  window.__SERVER_DOMAINS = Array.from(new Set([...(injected || []), ...DEFAULT_SERVER_DOMAINS]));
+})();
+const serverDomains = (typeof window !== "undefined" && window.__SERVER_DOMAINS) ? window.__SERVER_DOMAINS : DEFAULT_SERVER_DOMAINS.slice();
+let selectedServerDomain = serverDomains[0] || "";
+
+// Const
+const defaultUUID = "8febb7c9-a664-4b16-bbc5-563b099a4860";
+const itemsPerPage = 10;
+let currentPage = 1;
+const pathTemplate = "/Free/{ip}-{port}";
+
+// Bug options
+const bugOptions = [
+  { value: "", label: "Default" },
+  { value: "support.zoom.us", label: "ZOOM" },
+  { value: "ava.game.naver.com", label: "AVA" },
+  { value: "api.midtrans.com", label: "MIDTRANS" },
+];
+
+// ====== DOM helper (safe) ======
+const byId = (id) => document.getElementById(id);
+
+// Section/controls (guarded)
+let proxyListSection, accountCreationSection, resultSection, loadingIndicator;
+let proxyListContainer, noProxiesMessage, customUrlInput, proxyUrlInput;
+let paginationContainer, proxyCountInfo, searchInput;
+
+// INIT
+document.addEventListener("DOMContentLoaded", () => {
+  // Bind safely
+  proxyListSection       = byId("proxy-list-section");
+  accountCreationSection = byId("account-creation-section");
+  resultSection          = byId("result-section");
+  loadingIndicator       = byId("loading-indicator");
+  proxyListContainer     = byId("proxy-list-container");
+  noProxiesMessage       = byId("no-proxies-message");
+  customUrlInput         = byId("custom-url-input");
+  proxyUrlInput          = byId("proxy-url");
+  paginationContainer    = byId("pagination-container");
+  proxyCountInfo         = byId("proxy-count-info");
+  searchInput            = byId("search-input");
+
+  // Tampilkan minimal 1 data supaya UI tidak kosong
+  displayFallbackProxyList();
+
+  // Load proxy dari sumber utama + mirrors
+  loadProxyList(defaultProxyUrl);
+
+  // === Toolbar/listeners (guard tiap elemen) ===
+  const refreshBtn = byId("refresh-btn");
+  refreshBtn && refreshBtn.addEventListener("click", () => loadProxyList(defaultProxyUrl));
+
+  const customUrlBtn = byId("custom-url-btn");
+  customUrlBtn && customUrlBtn.addEventListener("click", () => {
+    customUrlInput && customUrlInput.classList.toggle("hidden");
+  });
+
+  const loadCustom = byId("load-custom-url");
+  loadCustom && loadCustom.addEventListener("click", () => {
+    const url = (proxyUrlInput && proxyUrlInput.value || "").trim();
+    if (url) loadProxyList(url);
+  });
+
+  const backToList = byId("back-to-list");
+  backToList && backToList.addEventListener("click", () => showProxyListSection());
+
+  const backToForm = byId("back-to-form");
+  backToForm && backToForm.addEventListener("click", () => {
+    resultSection && resultSection.classList.add("hidden");
+    accountCreationSection && accountCreationSection.classList.remove("hidden");
+  });
+
+  const createNew = byId("create-new");
+  createNew && createNew.addEventListener("click", () => {
+    resultSection && resultSection.classList.add("hidden");
+    accountCreationSection && accountCreationSection.classList.remove("hidden");
+  });
+
+  const backToListFromResult = byId("back-to-list-from-result");
+  backToListFromResult && backToListFromResult.addEventListener("click", () => showProxyListSection());
+
+  // Pencarian
+  searchInput && searchInput.addEventListener("input", function () {
+    const term = (this.value || "").toLowerCase().trim();
+    filteredProxyList = term
+      ? proxyList.filter(p =>
+          (p.provider || "").toLowerCase().includes(term) ||
+          (p.country  || "").toLowerCase().includes(term)
+        )
+      : [...proxyList];
+    currentPage = 1;
+    renderProxyList();
+  });
+
+  // Tabs -> show forms
+  const protocolTabs = document.querySelectorAll(".tab-btn");
+  const protocolForms = document.querySelectorAll(".protocol-form");
+  protocolTabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      protocolTabs.forEach(t => t.classList.remove("primary-btn"));
+      protocolTabs.forEach(t => t.classList.add("secondary-btn"));
+      tab.classList.remove("secondary-btn");
+      tab.classList.add("primary-btn");
+
+      protocolForms.forEach(f => f.classList.add("hidden"));
+      const targetId = tab.getAttribute("data-target");
+      const tgt = targetId ? byId(targetId) : null;
+      tgt && tgt.classList.remove("hidden");
+    });
+  });
+
+  // Server Domain dropdowns
+  ["vmess","vless","trojan","ss"].forEach(kind => {
+    const sel = byId(`${kind}-server-domain`);
+    if (!sel) return;
+    sel.name = sel.name || "server-domain";
+    sel.innerHTML = "";
+    serverDomains.forEach(d => {
+      const o = document.createElement("option");
+      o.value = d; o.textContent = d; sel.appendChild(o);
+    });
+    if (serverDomains.length) sel.value = serverDomains[0];
+    sel.addEventListener("change", function(){ selectedServerDomain = this.value; });
+  });
+
+  // Bug options + toggle Manual/Wildcard
+  populateBugOptions();
+
+  const bugIds = ["vmess","vless","trojan","ss"];
+  bugIds.forEach((k, idx) => {
+    const sel = byId(`${k}-bug`);
+    if (!sel) return;
+
+    const manualBox = byId(`${k}-manual-bug-container`);
+    const manualInp = byId(`${k}-manual-bug`);
+    const wildWrap  = byId(`${k}-wildcard-container`);
+    const wildCbx   = byId(`${k}-wildcard`);
+
+    sel.addEventListener("change", function(){
+      if (this.value === "manual"){
+        manualBox && manualBox.classList.add("show");
+        wildWrap  && wildWrap.classList.remove("show");
+        if (wildCbx){ wildCbx.checked = false; wildCbx.disabled = true; }
+      } else if (this.value !== ""){
+        manualBox && manualBox.classList.remove("show");
+        wildWrap  && wildWrap.classList.add("show");
+        if (wildCbx) wildCbx.disabled = false;
+      } else {
+        manualBox && manualBox.classList.remove("show");
+        wildWrap  && wildWrap.classList.remove("show");
+        if (wildCbx){ wildCbx.checked = false; wildCbx.disabled = false; }
+      }
+    });
+
+    manualInp && manualInp.addEventListener("input", () => {
+      if (wildCbx) wildCbx.disabled = true;
+    });
+  });
+
+  // Form submitters
+  ["vmess","vless","trojan","ss"].forEach(kind => {
+    const form = byId(`${kind}-account-form`);
+    if (!form) return;
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      const fd = new FormData(form);
+      const security = String(fd.get("security") || "tls"); // tls|ntls
+      const selectedDomain = String(fd.get("server-domain") || selectedServerDomain || serverDomains[0] || "");
+      const isTLS = (security === "tls");
+      const port = isTLS ? 443 : 80;
+
+      // BUG/SNI
+      let customBug = fd.get("bug") ? String(fd.get("bug")).trim() : "";
+      if (customBug === "manual") {
+        const manual = byId(`${kind}-manual-bug`);
+        const v = (manual && manual.value || "").trim();
+        customBug = v || "";
+      }
+      const wildcardCbx = byId(`${kind}-wildcard`);
+      const useWildcard = !!(wildcardCbx && wildcardCbx.checked);
+
+      const server = selectedDomain;             // selalu domain server
+      let host = selectedDomain;                 // host header default
+      if (customBug) host = useWildcard ? `${customBug}.${selectedDomain}` : customBug;
+      const sni = isTLS ? host : "";
+
+      // Path + Name
+      const name = encodeURIComponent(String(fd.get("name") || ""));
+      const path = encodeURIComponent(String(fd.get("path") || "/"));
+
+      // Build links
+      let url = "";
+      if (kind === "vmess"){
+        const vmessConfig = {
+          v: "2",
+          ps: fd.get("name"),
+          add: server,
+          port,
+          id: fd.get("uuid") || defaultUUID,
+          aid: "0",
+          net: "ws",
+          type: "none",
+          host,
+          path: decodeURIComponent(path),
+          tls: isTLS ? "tls" : "",
+          scy: "zero",
+        };
+        if (isTLS) vmessConfig.sni = sni;
+        url = "vmess://" + btoa(JSON.stringify(vmessConfig));
+      }
+      else if (kind === "vless"){
+        const uuid = fd.get("uuid") || defaultUUID;
+        const base = `vless://${uuid}@${server}:${port}?encryption=none&security=${security}&type=ws&host=${host}&path=${path}`;
+        url = isTLS ? `${base}&sni=${encodeURIComponent(sni)}#${name}` : `${base}#${name}`;
+      }
+      else if (kind === "trojan"){
+        const pass = fd.get("password") || "";
+        const base = `trojan://${pass}@${server}:${port}?security=${security}&type=ws&host=${host}&path=${path}`;
+        url = isTLS ? `${base}&sni=${encodeURIComponent(sni)}#${name}` : `${base}#${name}`;
+      }
+      else if (kind === "ss"){
+        const pass = fd.get("password") || "";
+        const method = "none";
+        const userInfo = btoa(`${method}:${pass}`);
+        const base = `ss://${userInfo}@${server}:${port}?encryption=none&type=ws&host=${host}&path=${path}&security=${security}`;
+        url = isTLS ? `${base}&sni=${encodeURIComponent(sni)}#${name}` : `${base}#${name}`;
+      }
+
+      const out = byId("connection-url");
+      out && (out.textContent = url);
+
+      generateQRCode(url);
+
+      accountCreationSection && accountCreationSection.classList.add("hidden");
+      resultSection && resultSection.classList.remove("hidden");
+    });
+  });
+
+  const copyBtn = byId("copy-url");
+  copyBtn && copyBtn.addEventListener("click", function(){
+    const txt = (byId("connection-url")?.textContent || "");
+    navigator.clipboard.writeText(txt).then(() => {
+      this.innerHTML = '<i class="fas fa-check mr-1"></i> Copied!';
+      setTimeout(() => this.innerHTML = '<i class="far fa-copy mr-1"></i> Copy', 1500);
+    }).catch(console.error);
+  });
+
+  const dlBtn = byId("download-qr");
+  dlBtn && dlBtn.addEventListener("click", downloadQRCode);
+});
+
+// ====== UI helpers ======
+function populateBugOptions(){
+  ["vmess","vless","trojan","ss"].forEach(kind => {
+    const sel = byId(`${kind}-bug`);
+    if (!sel) return;
+    sel.innerHTML = "";
+    bugOptions.forEach(opt => {
+      const o = document.createElement("option");
+      o.value = opt.value; o.textContent = opt.label; sel.appendChild(o);
+    });
+    const manual = document.createElement("option");
+    manual.value = "manual"; manual.textContent = "Manual";
+    sel.appendChild(manual);
+  });
+}
+
+function showProxyListSection(){
+  proxyListSection && proxyListSection.classList.remove("hidden");
+  accountCreationSection && accountCreationSection.classList.add("hidden");
+  resultSection && resultSection.classList.add("hidden");
+}
+
+function showAccountCreationSection(){
+  proxyListSection && proxyListSection.classList.add("hidden");
+  accountCreationSection && accountCreationSection.classList.remove("hidden");
+  resultSection && resultSection.classList.add("hidden");
+}
+
+// ====== QR Code (safe fallbacks) ======
+function generateQRCode(text){
+  const wrap = byId("qrcode");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+
+  if (QRCode && typeof QRCode.toCanvas === "function"){
+    try{
+      QRCode.toCanvas(wrap, text, { width:200, margin:1, color:{dark:"#000000", light:"#FFFFFF"} },
+        (err)=>{ if (err) { console.error(err); generateQRCodeFallback(text, wrap); }});
+      return;
+    }catch(e){ console.error(e); }
+  }
+  generateQRCodeFallback(text, wrap);
+}
+function generateQRCodeFallback(text, container){
+  if (QRCode && typeof QRCode.toString === "function"){
+    try{
+      QRCode.toString(text, { type:"svg", width:200, margin:1, color:{dark:"#000000", light:"#FFFFFF"} },
+        (err, svg)=>{ if (err || !svg){ console.error(err); generateQRCodeLastResort(text, container); }
+                      else { container.innerHTML = svg; }});
+      return;
+    }catch(e){ console.error(e); }
+  }
+  generateQRCodeLastResort(text, container);
+}
+function generateQRCodeLastResort(text, container){
+  try{
+    const url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(text)}`;
+    const img = document.createElement("img");
+    img.src = url; img.alt = "QR Code"; img.width = 200; img.height = 200;
+    img.onerror = () => container.innerHTML = '<div class="text-center text-rose-500">Failed to generate QR</div>';
+    container.innerHTML = ""; container.appendChild(img);
+  }catch(e){
+    console.error(e);
+    container.innerHTML = '<div class="text-center text-rose-500">Failed to generate QR</div>';
+  }
+}
+function downloadQRCode(){
+  const q = byId("qrcode");
+  if (!q) return;
+  const canvas = q.querySelector("canvas");
+  const img    = q.querySelector("img");
+  const svg    = q.querySelector("svg");
+  let url = null;
+  try{
+    if (canvas) url = canvas.toDataURL("image/png");
+    else if (img) url = img.src;
+    else if (svg){
+      const data = new XMLSerializer().serializeToString(svg);
+      const blob = new Blob([data], {type:"image/svg+xml;charset=utf-8"});
+      url = URL.createObjectURL(blob);
     }
-    html,body{height:100%}
-    body{
-      background:
-        radial-gradient(1200px 600px at 10% -10%, rgba(106,17,203,.12), transparent 60%),
-        radial-gradient(900px 400px at 90% 0%, rgba(37,117,252,.10), transparent 60%),
-        linear-gradient(180deg, #0a1424 0%, var(--bg) 60%, #0a1424 100%);
-      color:var(--text);
+  }catch(e){ console.error(e); }
+  if (!url){ alert("Failed to download QR"); return; }
+  const a = document.createElement("a");
+  a.href = url; a.download = "qrcode.png"; document.body.appendChild(a); a.click(); a.remove();
+  if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+}
+
+// ====== Proxy List ======
+function displayFallbackProxyList(){
+  proxyList = [{ ip:"103.6.207.108", port:"8080", country:"ID", provider:"PT Pusat Media Indonesia" }];
+  filteredProxyList = [...proxyList];
+  renderProxyList();
+}
+
+function processProxyData(text){
+  const lines = (text || "").split(/\r?\n/).filter(l => l.trim() !== "");
+  if (!lines.length){
+    noProxiesMessage && noProxiesMessage.classList.remove("hidden");
+    return;
+  }
+  let delimiter = ",";
+  const f = lines[0];
+  if (f.includes("\t")) delimiter = "\t";
+  else if (f.includes("|")) delimiter = "|";
+  else if (f.includes(";")) delimiter = ";";
+
+  proxyList = lines.map(line => {
+    const parts = line.split(delimiter);
+    if (parts.length >= 2){
+      return {
+        ip: (parts[0]||"").trim(),
+        port: (parts[1]||"").trim(),
+        country: parts[2] ? parts[2].trim() : "Unknown",
+        provider: parts[3] ? parts[3].trim() : "Unknown Provider",
+      };
     }
-    .glass{
-      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
-      border:1px solid rgba(148,163,184,.15);
-      box-shadow:0 10px 30px rgba(0,0,0,.35);
-      border-radius:20px;
-      backdrop-filter: blur(6px);
+    return null;
+  }).filter(Boolean);
+
+  if (!proxyList.length){
+    noProxiesMessage && noProxiesMessage.classList.remove("hidden");
+    displayFallbackProxyList();
+    return;
+  }
+
+  currentPage = 1;
+  filteredProxyList = [...proxyList];
+  renderProxyList();
+}
+
+function renderProxyList(){
+  if (!proxyListContainer) return;
+  proxyListContainer.innerHTML = "";
+
+  if (!filteredProxyList.length){
+    noProxiesMessage && noProxiesMessage.classList.remove("hidden");
+    paginationContainer && (paginationContainer.innerHTML = "");
+    proxyCountInfo && (proxyCountInfo.textContent = "");
+    return;
+  }
+  noProxiesMessage && noProxiesMessage.classList.add("hidden");
+
+  const totalPages = Math.ceil(filteredProxyList.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex   = Math.min(startIndex + itemsPerPage, filteredProxyList.length);
+  const current    = filteredProxyList.slice(startIndex, endIndex);
+
+  current.forEach((proxy, idx) => {
+    const actualIndex = startIndex + idx;
+
+    const row = document.createElement("div");
+    row.className = "row";
+
+    const ip = document.createElement("div");
+    ip.textContent = `${proxy.ip}:${proxy.port}`;
+
+    const country = document.createElement("div");
+    country.textContent = proxy.country;
+
+    const isp = document.createElement("div");
+    isp.textContent = proxy.provider;
+
+    const action = document.createElement("div");
+    action.className = "text-right";
+    const btn = document.createElement("button");
+    btn.className = "create-account-btn primary-btn py-2 px-3 text-xs";
+    btn.setAttribute("data-index", actualIndex);
+    btn.textContent = "Create";
+    action.appendChild(btn);
+
+    row.appendChild(ip); row.appendChild(country); row.appendChild(isp); row.appendChild(action);
+    proxyListContainer.appendChild(row);
+  });
+
+  // Bind Create buttons
+  document.querySelectorAll(".create-account-btn").forEach(b => {
+    b.addEventListener("click", function(){
+      const index = parseInt(this.getAttribute("data-index"), 10);
+      selectProxy(index);
+      showAccountCreationSection();
+    });
+  });
+
+  renderPagination(totalPages);
+
+  proxyCountInfo && (proxyCountInfo.textContent = `Showing ${startIndex + 1}-${endIndex} of ${filteredProxyList.length} proxies`);
+}
+
+function renderPagination(totalPages){
+  if (!paginationContainer) return;
+  paginationContainer.innerHTML = "";
+  if (totalPages <= 1) return;
+
+  const mkBtn = (label, disabled, onClick, extra="") => {
+    const b = document.createElement("button");
+    b.className = `pagination-btn ${disabled ? "disabled" : ""} ${extra}`;
+    b.innerHTML = label; b.disabled = !!disabled;
+    if (!disabled) b.addEventListener("click", onClick);
+    return b;
+  };
+
+  paginationContainer.appendChild(mkBtn('<i class="fas fa-chevron-left"></i>', currentPage===1, ()=>{
+    currentPage--; renderProxyList();
+  }));
+
+  const maxVisible = window.innerWidth < 640 ? 3 : 5;
+  let start = Math.max(1, currentPage - Math.floor(maxVisible/2));
+  let end   = Math.min(totalPages, start + maxVisible - 1);
+  if (end - start + 1 < maxVisible) start = Math.max(1, end - maxVisible + 1);
+
+  const addEllipsis = () => {
+    const sp = document.createElement("span");
+    sp.className = "px-1 text-gray-400";
+    sp.textContent = "...";
+    paginationContainer.appendChild(sp);
+  };
+
+  if (start > 1){
+    paginationContainer.appendChild(mkBtn("1", false, ()=>{ currentPage = 1; renderProxyList(); }));
+    if (start > 2) addEllipsis();
+  }
+
+  for (let i = start; i <= end; i++){
+    paginationContainer.appendChild(
+      mkBtn(String(i), false, ()=>{ currentPage = i; renderProxyList(); }, i===currentPage ? "active" : "")
+    );
+  }
+
+  if (end < totalPages){
+    if (end < totalPages - 1) addEllipsis();
+    paginationContainer.appendChild(mkBtn(String(totalPages), false, ()=>{ currentPage = totalPages; renderProxyList(); }));
+  }
+
+  paginationContainer.appendChild(mkBtn('<i class="fas fa-chevron-right"></i>', currentPage===totalPages, ()=>{
+    currentPage++; renderProxyList();
+  }));
+}
+
+async function selectProxy(index){
+  selectedProxy = filteredProxyList[index];
+  if (!selectedProxy) return;
+
+  const sIP = byId("selected-ip"), sPort=byId("selected-port"), sCountry=byId("selected-country"), sProv=byId("selected-provider");
+  sIP && (sIP.textContent = selectedProxy.ip);
+  sPort && (sPort.textContent = selectedProxy.port);
+  sCountry && (sCountry.textContent = selectedProxy.country);
+  sProv && (sProv.textContent = selectedProxy.provider);
+
+  const baseName = `${selectedProxy.country} - ${selectedProxy.provider}`;
+  const path = pathTemplate.replace("{ip}", selectedProxy.ip).replace("{port}", selectedProxy.port);
+
+  ["vmess","vless","trojan","ss"].forEach(kind => {
+    const pathInp = byId(`${kind}-path`);
+    pathInp && (pathInp.value = path);
+
+    const secSel = byId(`${kind}-security`);
+    const nameInp = byId(`${kind}-name`);
+    if (secSel && nameInp){
+      const updateName = () => {
+        const tlsType = (secSel.value === "tls") ? "TLS" : "NTLS";
+        nameInp.value = `${baseName} [${kind.toUpperCase()}-${tlsType}]`;
+      };
+      updateName();
+      // Rebind cleanly
+      const clone = secSel.cloneNode(true);
+      secSel.parentNode.replaceChild(clone, secSel);
+      clone.addEventListener("change", updateName);
     }
-    .control{
-      background: #0c1a2f;
-      border:1px solid var(--ring);
-      border-radius:10px;
-      color:var(--text);
-      height:44px;
-      padding:0 .9rem;
-      outline:none;
+  });
+
+  // status ping (optional; tidak memblokir UI bila error)
+  checkProxyStatus(selectedProxy);
+}
+
+function checkProxyStatus(proxy){
+  const start = performance.now();
+  const url = `https://api.jb8fd7grgd.workers.dev/${proxy.ip}:${proxy.port}`;
+  const box = byId("proxy-status-container"),
+        load = byId("proxy-status-loading"),
+        ok = byId("proxy-status-active"),
+        dead = byId("proxy-status-dead"),
+        unk = byId("proxy-status-unknown"),
+        lat = byId("proxy-latency");
+
+  box && box.classList.remove("hidden");
+  load && load.classList.remove("hidden");
+  ok && ok.classList.add("hidden");
+  dead && dead.classList.add("hidden");
+  unk && unk.classList.add("hidden");
+
+  fetch(url).then(r => r.json()).then(data => {
+    const ms = Math.floor(performance.now() - start);
+    load && load.classList.add("hidden");
+    const item = Array.isArray(data) ? data[0] : data;
+    if (item && item.proxyip === true){
+      ok && ok.classList.remove("hidden");
+      lat && (lat.textContent = `${ms}ms`);
+    }else{
+      dead && dead.classList.remove("hidden");
     }
-    .control:focus{ box-shadow:0 0 0 2px rgba(99,102,241,.35); border-color:#6366f1 }
-    .primary-btn{
-      background: linear-gradient(90deg, var(--accent), var(--accent-2));
-      color:white; font-weight:600;
-      border-radius:10px;
-      padding:.6rem 1rem;
+  }).catch(err => {
+    console.warn("status check error:", err);
+    load && load.classList.add("hidden");
+    unk && unk.classList.remove("hidden");
+  });
+}
+
+// ====== Loader with resilient CORS ======
+function loadProxyList(url){
+  loadingIndicator && loadingIndicator.classList.remove("hidden");
+  proxyListContainer && (proxyListContainer.innerHTML = "");
+  noProxiesMessage && noProxiesMessage.classList.add("hidden");
+
+  const attempts = [
+    async () => { // direct
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) throw new Error("Direct fetch failed");
+      return await r.text();
+    },
+    async () => { // allorigins
+      const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+      if (!r.ok) throw new Error("AllOrigins failed");
+      const j = await r.json();
+      return j.contents;
+    },
+    async () => { // cors.sh
+      const r = await fetch(`https://cors.sh/${url}`, {
+        headers: { "x-cors-api-key": "temp_" + Math.random().toString(36).slice(2,10) }
+      });
+      if (!r.ok) throw new Error("cors.sh failed");
+      return await r.text();
+    },
+    async () => { // cors-anywhere (sering 403; let it try)
+      const r = await fetch(`https://cors-anywhere.herokuapp.com/${url}`);
+      if (!r.ok) throw new Error("cors-anywhere failed");
+      return await r.text();
+    },
+    async () => { // r.jina.ai mirror (HTTP path)
+      // mirror perlu http; untuk raw GH pakai http://raw.githubusercontent.com
+      const httpUrl = url.replace(/^https:/, "http:");
+      const r = await fetch(`https://r.jina.ai/http/${httpUrl.replace(/^http:\/\//, "")}`);
+      if (!r.ok) throw new Error("jina mirror failed");
+      return await r.text();
+    },
+  ];
+
+  (async function run(i=0){
+    if (i >= attempts.length){
+      console.error("All sources failed. Showing fallback.");
+      loadingIndicator && loadingIndicator.classList.add("hidden");
+      noProxiesMessage && noProxiesMessage.classList.remove("hidden");
+      displayFallbackProxyList();
+      return;
     }
-    .secondary-btn{
-      background:#101f36; color:#c9d4e5;
-      border:1px solid var(--ring);
-      border-radius:10px;
-      padding:.55rem .9rem;
+    try{
+      const text = await attempts[i]();
+      processProxyData(text);
+      loadingIndicator && loadingIndicator.classList.add("hidden");
+    }catch(err){
+      console.warn(`source[${i}] error:`, err);
+      run(i+1);
     }
-    .title-grad{
-      background: linear-gradient(90deg,#cde3ff,#fff);
-      -webkit-background-clip:text; background-clip:text;
-      color:transparent;
-    }
-    .table-head{ color:#aebbd0; font-size:.85rem; letter-spacing:.02em }
-    .row{
-      display:grid; grid-template-columns: 260px 100px 1fr 90px; gap:12px;
-      padding:.9rem 1rem; border-bottom:1px solid rgba(148,163,184,.08)
-    }
-    .row:hover{ background:rgba(148,163,184,.05) }
-    .proxy-card{ background:#0d1a2d; border:1px solid rgba(148,163,184,.12); border-radius:12px; padding:12px }
-    .pagination-btn{
-      background:#0e1b30; border:1px solid var(--ring); color:#cbd5e1;
-      border-radius:10px; padding:.45rem .7rem; min-width:38px
-    }
-    .pagination-btn.active{ background:linear-gradient(90deg, var(--accent), var(--accent-2)); color:#fff; border-color:transparent }
-    .pagination-btn.disabled{ opacity:.4; cursor:not-allowed }
-    .hidden{ display:none !important }
-    .show{ display:block !important }
-    .pulse-animation{
-      animation:pulse 1.4s ease-in-out infinite;
-      box-shadow:0 0 0 0 rgba(16,185,129,.5)
-    }
-    @keyframes pulse{
-      0%{transform:scale(.95); box-shadow:0 0 0 0 rgba(148,163,184,.35)}
-      70%{transform:scale(1); box-shadow:0 0 0 10px rgba(148,163,184,0)}
-      100%{transform:scale(.95); box-shadow:0 0 0 0 rgba(148,163,184,0)}
-    }
-  </style>
-</head>
-<body class="min-h-full">
-
-  <!-- Topbar -->
-  <header class="w-full">
-    <div class="max-w-6xl mx-auto flex items-center justify-between px-4 py-4">
-      <div class="flex items-center gap-3">
-        <div class="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center font-black">
-          <span>OL</span>
-        </div>
-        <div class="leading-tight">
-          <div class="font-extrabold text-lg tracking-wide">ORANG_LEMAH</div>
-          <div class="text-[12px] text-slate-400 -mt-0.5">Nautica Proxy Utility</div>
-        </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <a href="#" class="primary-btn text-sm">Create VPN</a>
-        <a href="#" class="secondary-btn text-sm">Cek Kuota</a>
-      </div>
-    </div>
-  </header>
-
-  <!-- Main Card -->
-  <main class="max-w-6xl mx-auto px-4 pb-16">
-    <section class="glass p-6 sm:p-8 mt-6">
-
-      <h1 class="text-center text-2xl sm:text-3xl font-extrabold mb-6">
-        <span class="title-grad">Free Vless Trojan ShadowSocks Using CF Proxy</span>
-      </h1>
-
-      <!-- Filter bar -->
-      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
-        <div>
-          <label class="block text-sm text-slate-300 mb-1">Protocol</label>
-          <select id="protocol-select" class="control">
-            <option value="VLESS">VLESS</option>
-            <option value="VMESS">VMESS</option>
-            <option value="TROJAN">TROJAN</option>
-            <option value="SS">SS</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm text-slate-300 mb-1">Country</label>
-          <select id="country-select" class="control">
-            <option value="all">🌐 All</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm text-slate-300 mb-1">Wildcard</label>
-          <!-- di JS: tidak dipakai langsung; dropdown bug/wildcard ada di form, ini hanya kosmetik filter seperti di screenshot -->
-          <select id="wildcard-filter" class="control">
-            <option>Default</option>
-            <option>support.zoom.us</option>
-            <option>ava.game.naver.com</option>
-            <option>api.midtrans.com</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm text-slate-300 mb-1">Security</label>
-          <select id="security-filter" class="control">
-            <option value="tls">TLS (443)</option>
-            <option value="ntls">NTLS (80)</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Toolbar -->
-      <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-4">
-        <div class="flex items-center gap-2">
-          <button id="refresh-btn" class="secondary-btn flex items-center gap-2">
-            <i class="fa-solid fa-rotate"></i><span>Refresh</span>
-          </button>
-          <button id="custom-url-btn" class="secondary-btn">Custom URL</button>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <div class="relative">
-            <input id="search-input" class="control !h-10 pr-8" placeholder="Search ISP / Country" />
-            <span class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400">
-              <i class="fa-solid fa-magnifying-glass"></i>
-            </span>
-          </div>
-          <span id="proxy-count-info" class="text-xs text-slate-400"></span>
-        </div>
-      </div>
-
-      <!-- Custom URL field (hidden default) -->
-      <div id="custom-url-input" class="hidden mb-4">
-        <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
-          <input id="proxy-url" class="control" placeholder="https://.../ProxyList.txt" />
-          <button id="load-custom-url" class="primary-btn">Load</button>
-        </div>
-      </div>
-
-      <!-- Loading -->
-      <div id="loading-indicator" class="hidden text-center py-6 text-slate-300">
-        <i class="fa-solid fa-spinner animate-spin mr-2"></i> Loading proxies...
-      </div>
-
-      <!-- List Section -->
-      <section id="proxy-list-section">
-        <div class="row table-head bg-[#0d1a2a] rounded-t-xl border-b border-slate-700/60">
-          <div>IP</div><div>Country</div><div>ISP</div><div class="text-right pr-2">Action</div>
-        </div>
-
-        <div id="proxy-list-container" class="divide-y divide-slate-700/40">
-          <!-- rows diisi JS -->
-        </div>
-
-        <div id="no-proxies-message" class="hidden text-center text-slate-400 py-6">
-          No proxies found.
-        </div>
-
-        <!-- Pagination -->
-        <div id="pagination-container" class="flex items-center gap-2 justify-center mt-5"></div>
-      </section>
-
-      <!-- Account Creation Section (hidden by default) -->
-      <section id="account-creation-section" class="hidden mt-4">
-        <div class="flex items-start justify-between">
-          <div>
-            <div class="text-sm text-slate-400">Selected</div>
-            <div class="mt-1 text-slate-200">
-              <span id="selected-ip" class="font-semibold"></span> :
-              <span id="selected-port"></span>
-              <span class="text-slate-400 ml-3">(<span id="selected-country"></span>)</span>
-            </div>
-            <div class="text-slate-400 text-sm" id="selected-provider"></div>
-          </div>
-          <div class="flex items-center gap-2">
-            <button id="back-to-list" class="secondary-btn">Back to List</button>
-          </div>
-        </div>
-
-        <!-- status ping -->
-        <div id="proxy-status-container" class="hidden mt-3">
-          <div id="proxy-status-loading" class="text-slate-300"><i class="fa-solid fa-circle-notch animate-spin mr-2"></i> Checking...</div>
-          <div id="proxy-status-active" class="hidden text-emerald-400"><i class="fa-solid fa-circle mr-2"></i> Active • <span id="proxy-latency">0ms</span></div>
-          <div id="proxy-status-dead" class="hidden text-rose-400"><i class="fa-solid fa-circle mr-2"></i> Dead</div>
-          <div id="proxy-status-unknown" class="hidden text-amber-400"><i class="fa-solid fa-circle mr-2"></i> Unknown</div>
-        </div>
-
-        <!-- Tabs -->
-        <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <button class="tab-btn primary-btn" data-target="vmess-form-wrap">VMess</button>
-          <button class="tab-btn secondary-btn" data-target="vless-form-wrap">VLESS</button>
-          <button class="tab-btn secondary-btn" data-target="trojan-form-wrap">Trojan</button>
-          <button class="tab-btn secondary-btn" data-target="ss-form-wrap">SS</button>
-        </div>
-
-        <!-- Forms -->
-        <div class="mt-5 space-y-6">
-
-          <!-- VMESS -->
-          <div id="vmess-form-wrap" class="protocol-form">
-            <form id="vmess-account-form" class="grid sm:grid-cols-2 gap-3">
-              <div>
-                <label class="block text-sm mb-1">Name</label>
-                <input id="vmess-name" name="name" class="control" placeholder="My VMess" />
-              </div>
-              <div>
-                <label class="block text-sm mb-1">UUID</label>
-                <input id="vmess-uuid" name="uuid" class="control" value="8febb7c9-a664-4b16-bbc5-563b099a4860" />
-              </div>
-
-              <div>
-                <label class="block text-sm mb-1">Server Domain</label>
-                <select id="vmess-server-domain" class="control"></select>
-              </div>
-              <div>
-                <label class="block text-sm mb-1">Security</label>
-                <select id="vmess-security" name="security" class="control">
-                  <option value="tls">tls</option>
-                  <option value="ntls">ntls</option>
-                </select>
-              </div>
-
-              <div class="sm:col-span-2">
-                <label class="block text-sm mb-1">Path</label>
-                <input id="vmess-path" name="path" class="control" value="/" />
-              </div>
-
-              <div>
-                <label class="block text-sm mb-1">Bug</label>
-                <select id="vmess-bug" name="bug" class="control"></select>
-              </div>
-              <div id="vmess-manual-bug-container" class="hidden">
-                <label class="block text-sm mb-1">Manual Bug</label>
-                <input id="vmess-manual-bug" class="control" placeholder="host.example.com" />
-              </div>
-              <div id="vmess-wildcard-container" class="hidden">
-                <label class="inline-flex items-center gap-2 text-sm mt-2">
-                  <input id="vmess-wildcard" name="wildcard" type="checkbox" class="h-4 w-4">
-                  <span>Wildcard (bug.subdomain.server)</span>
-                </label>
-              </div>
-
-              <div class="sm:col-span-2 flex justify-end mt-2">
-                <button class="primary-btn" type="submit">Generate</button>
-              </div>
-            </form>
-          </div>
-
-          <!-- VLESS -->
-          <div id="vless-form-wrap" class="protocol-form hidden">
-            <form id="vless-account-form" class="grid sm:grid-cols-2 gap-3">
-              <div>
-                <label class="block text-sm mb-1">Name</label>
-                <input id="vless-name" name="name" class="control" placeholder="My VLESS" />
-              </div>
-              <div>
-                <label class="block text-sm mb-1">UUID</label>
-                <input id="vless-uuid" name="uuid" class="control" value="8febb7c9-a664-4b16-bbc5-563b099a4860" />
-              </div>
-
-              <div>
-                <label class="block text-sm mb-1">Server Domain</label>
-                <select id="vless-server-domain" class="control"></select>
-              </div>
-              <div>
-                <label class="block text-sm mb-1">Security</label>
-                <select id="vless-security" name="security" class="control">
-                  <option value="tls">tls</option>
-                  <option value="ntls">ntls</option>
-                </select>
-              </div>
-
-              <div class="sm:col-span-2">
-                <label class="block text-sm mb-1">Path</label>
-                <input id="vless-path" name="path" class="control" value="/" />
-              </div>
-
-              <div>
-                <label class="block text-sm mb-1">Bug</label>
-                <select id="vless-bug" name="bug" class="control"></select>
-              </div>
-              <div id="vless-manual-bug-container" class="hidden">
-                <label class="block text-sm mb-1">Manual Bug</label>
-                <input id="vless-manual-bug" class="control" placeholder="host.example.com" />
-              </div>
-              <div id="vless-wildcard-container" class="hidden">
-                <label class="inline-flex items-center gap-2 text-sm mt-2">
-                  <input id="vless-wildcard" name="wildcard" type="checkbox" class="h-4 w-4">
-                  <span>Wildcard (bug.subdomain.server)</span>
-                </label>
-              </div>
-
-              <div class="sm:col-span-2 flex justify-end mt-2">
-                <button class="primary-btn" type="submit">Generate</button>
-              </div>
-            </form>
-          </div>
-
-          <!-- TROJAN -->
-          <div id="trojan-form-wrap" class="protocol-form hidden">
-            <form id="trojan-account-form" class="grid sm:grid-cols-2 gap-3">
-              <div>
-                <label class="block text-sm mb-1">Name</label>
-                <input id="trojan-name" name="name" class="control" placeholder="My Trojan" />
-              </div>
-              <div>
-                <label class="block text-sm mb-1">Password</label>
-                <input id="trojan-password" name="password" class="control" placeholder="password" />
-              </div>
-
-              <div>
-                <label class="block text-sm mb-1">Server Domain</label>
-                <select id="trojan-server-domain" class="control"></select>
-              </div>
-              <div>
-                <label class="block text-sm mb-1">Security</label>
-                <select id="trojan-security" name="security" class="control">
-                  <option value="tls">tls</option>
-                  <option value="ntls">ntls</option>
-                </select>
-              </div>
-
-              <div class="sm:col-span-2">
-                <label class="block text-sm mb-1">Path</label>
-                <input id="trojan-path" name="path" class="control" value="/" />
-              </div>
-
-              <div>
-                <label class="block text-sm mb-1">Bug</label>
-                <select id="trojan-bug" name="bug" class="control"></select>
-              </div>
-              <div id="trojan-manual-bug-container" class="hidden">
-                <label class="block text-sm mb-1">Manual Bug</label>
-                <input id="trojan-manual-bug" class="control" placeholder="host.example.com" />
-              </div>
-              <div id="trojan-wildcard-container" class="hidden">
-                <label class="inline-flex items-center gap-2 text-sm mt-2">
-                  <input id="trojan-wildcard" name="wildcard" type="checkbox" class="h-4 w-4">
-                  <span>Wildcard (bug.subdomain.server)</span>
-                </label>
-              </div>
-
-              <div class="sm:col-span-2 flex justify-end mt-2">
-                <button class="primary-btn" type="submit">Generate</button>
-              </div>
-            </form>
-          </div>
-
-          <!-- SS -->
-          <div id="ss-form-wrap" class="protocol-form hidden">
-            <form id="ss-account-form" class="grid sm:grid-cols-2 gap-3">
-              <div>
-                <label class="block text-sm mb-1">Name</label>
-                <input id="ss-name" name="name" class="control" placeholder="My SS" />
-              </div>
-              <div>
-                <label class="block text-sm mb-1">Password</label>
-                <input id="ss-password" name="password" class="control" placeholder="password" />
-              </div>
-
-              <div>
-                <label class="block text-sm mb-1">Server Domain</label>
-                <select id="ss-server-domain" class="control"></select>
-              </div>
-              <div>
-                <label class="block text-sm mb-1">Security</label>
-                <select id="ss-security" name="security" class="control">
-                  <option value="tls">tls</option>
-                  <option value="ntls">ntls</option>
-                </select>
-              </div>
-
-              <div class="sm:col-span-2">
-                <label class="block text-sm mb-1">Path</label>
-                <input id="ss-path" name="path" class="control" value="/" />
-              </div>
-
-              <div>
-                <label class="block text-sm mb-1">Bug</label>
-                <select id="ss-bug" name="bug" class="control"></select>
-              </div>
-              <div id="ss-manual-bug-container" class="hidden">
-                <label class="block text-sm mb-1">Manual Bug</label>
-                <input id="ss-manual-bug" class="control" placeholder="host.example.com" />
-              </div>
-              <div id="ss-wildcard-container" class="hidden">
-                <label class="inline-flex items-center gap-2 text-sm mt-2">
-                  <input id="ss-wildcard" name="wildcard" type="checkbox" class="h-4 w-4">
-                  <span>Wildcard (bug.subdomain.server)</span>
-                </label>
-              </div>
-
-              <div class="sm:col-span-2 flex justify-end mt-2">
-                <button class="primary-btn" type="submit">Generate</button>
-              </div>
-            </form>
-          </div>
-
-        </div>
-
-        <div class="mt-6">
-          <button id="back-to-form" class="secondary-btn hidden">Back</button>
-        </div>
-      </section>
-
-      <!-- Result Section -->
-      <section id="result-section" class="hidden mt-8">
-        <div class="flex items-center justify-between">
-          <h3 class="text-xl font-semibold">Result</h3>
-          <div class="flex items-center gap-2">
-            <button id="back-to-list-from-result" class="secondary-btn">Back to List</button>
-            <button id="create-new" class="secondary-btn">Create New</button>
-          </div>
-        </div>
-
-        <div class="grid sm:grid-cols-[1fr_auto] gap-3 mt-4">
-          <pre id="connection-url" class="glass p-3 rounded-lg overflow-x-auto text-[13px]"></pre>
-          <div class="flex sm:flex-col gap-2">
-            <button id="copy-url" class="secondary-btn"><i class="far fa-copy mr-1"></i> Copy</button>
-            <button id="download-qr" class="primary-btn">Download QR</button>
-          </div>
-        </div>
-
-        <div id="qrcode" class="mt-4 p-3 bg-[#0e1b30] border border-slate-700/50 rounded-xl w-[210px] h-[210px] flex items-center justify-center"></div>
-      </section>
-
-    </section>
-  </main>
-
-  <!-- Font Awesome (icons for demo) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-
-  <!-- App JS kamu -->
-  <script src="app.js"></script>
-</body>
-</html>
+  })();
+}
